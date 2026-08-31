@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+
+  --brand: #c2500f;
+  --brand-strong: #9c3d0a;
+  --brand-soft: #f8e7d7;
+  --brand-contrast: #ffffff;
+
+  --sidebar: #1a1a1a;
+  --sidebar-ink: #f0ede8;
+  --sidebar-muted: #8a867f;
+
+  --bg: #f6f3ec;
+  --surface: #ffffff;
+  --surface-2: #efeae0;
+  --border: #e8e2d6;
+  --ink: #201d19;
+  --muted: #6f6a61;
+
+  --ok: #3f7a50;
+  --ok-soft: #dcebde;
+  --warn: #b9821a;
+  --warn-soft: #f6eccf;
+  --inprog: #8a6a2f;
+  --inprog-soft: #f3e6c9;
+  --danger: #b42318;
+  --danger-soft: #fbe4e4;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-contrast: var(--brand-contrast);
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(30, 20, 10, 0.03);
+}
