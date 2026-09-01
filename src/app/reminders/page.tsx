@@ -1,4 +1,5 @@
 import PageHeader from "@/components/PageHeader";
+import AppShell from "@/components/AppShell";
 import { getReminders, getMemberById, getEventById } from "@/lib/data";
 import { Avatar, DueBadge, PriorityTag } from "@/components/ui";
 import { AlertIcon, ClockIcon, BellIcon } from "@/components/icons";
@@ -16,7 +17,8 @@ export default function RemindersPage() {
   const reminders = getReminders();
 
   return (
-    <div className="space-y-6">
+    <AppShell>
+      <div className="space-y-6">
       <PageHeader title="Reminders" subtitle={`Auto-generated from task deadlines. ${reminders.length} task${reminders.length === 1 ? "" : "s"} need attention.`} />
 
       {groups.map((g) => {
@@ -52,5 +54,6 @@ export default function RemindersPage() {
         );
       })}
     </div>
+    </AppShell>
   );
 }

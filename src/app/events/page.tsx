@@ -1,4 +1,5 @@
 import PageHeader from "@/components/PageHeader";
+import AppShell from "@/components/AppShell";
 import { getEvents, getTasks, getMemberById } from "@/lib/data";
 import { Avatar } from "@/components/ui";
 import { MapPinIcon, CalendarIcon } from "@/components/icons";
@@ -20,7 +21,8 @@ export default function EventsPage() {
   const tasks = getTasks();
 
   return (
-    <div className="space-y-6">
+    <AppShell>
+      <div className="space-y-6">
       <PageHeader title="Events" subtitle={`${events.length} events this semester, with their linked tasks.`} />
 
       <div className="grid gap-5 md:grid-cols-2">
@@ -76,5 +78,6 @@ export default function EventsPage() {
         })}
       </div>
     </div>
+    </AppShell>
   );
 }

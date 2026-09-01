@@ -1,4 +1,5 @@
 import PageHeader from "@/components/PageHeader";
+import AppShell from "@/components/AppShell";
 import { getTasks, getEvents, getEventById, getDashboardStats } from "@/lib/data";
 import { StatusPill, PriorityInline, DueText } from "@/components/ui";
 import { daysUntil } from "@/lib/format";
@@ -50,7 +51,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div>
+    <AppShell>
       <PageHeader title="Dashboard" subtitle={dateLine} />
 
       {stats.overdue > 0 && (
@@ -153,6 +154,6 @@ export default function DashboardPage() {
           })}
         </ul>
       </section>
-    </div>
+    </AppShell>
   );
 }

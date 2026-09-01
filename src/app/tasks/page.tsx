@@ -1,4 +1,5 @@
 import PageHeader from "@/components/PageHeader";
+import AppShell from "@/components/AppShell";
 import { getTasksByStatus, getMemberById, getEventById, getTasks } from "@/lib/data";
 import { STATUS_ORDER, STATUS_LABEL, type TaskStatus } from "@/lib/types";
 import { Avatar, DueBadge, PriorityTag } from "@/components/ui";
@@ -16,7 +17,7 @@ export default function TasksPage() {
   const total = getTasks().length;
 
   return (
-    <div>
+    <AppShell>
       <PageHeader title="Tasks" subtitle={`${total} tasks across the committee · move menu on each card`} />
 
       <div className="grid gap-5 lg:grid-cols-3">
@@ -67,6 +68,6 @@ export default function TasksPage() {
           );
         })}
       </div>
-    </div>
+    </AppShell>
   );
 }
