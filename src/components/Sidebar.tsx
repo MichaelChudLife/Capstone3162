@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { DashboardIcon, BoardIcon, CalendarIcon, BellIcon } from "@/components/icons";
+import { DashboardIcon, BoardIcon, CalendarIcon, BellIcon, UsersIcon } from "@/components/icons";
 
 const nav = [
   { href: "/", label: "Dashboard", Icon: DashboardIcon },
   { href: "/tasks", label: "Tasks", Icon: BoardIcon },
   { href: "/events", label: "Events", Icon: CalendarIcon },
+  { href: "/members", label: "Members", Icon: UsersIcon },
   { href: "/reminders", label: "Reminders", Icon: BellIcon },
 ];
 
