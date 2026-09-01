@@ -3,11 +3,8 @@ const fieldClass =
 
 function Flame() {
   return (
-    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-black">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="var(--brand)">
-        <path d="M14 2c.4 3-1.4 4.6-3 6.2S8.4 11.5 8.4 13.4a3.6 3.6 0 0 0 7.2 0c0-1.3-.4-2.3-1-3.3 2 1 3.4 3 3.4 5.3a6.9 6.9 0 1 1-13.8 0c0-3 1.8-5 3.5-6.7C13.2 5.5 13.7 4 14 2Z" />
-      </svg>
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/cca-logo.png" alt="CCA Hub" className="h-11 w-11 object-contain" />
   );
 }
 
