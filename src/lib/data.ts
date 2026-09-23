@@ -10,6 +10,11 @@ import {
   type EventInput,
   type TaskInput,
 } from "./types";
+import { hashPassword } from "./password";
+
+// Demo seed data only — every member shares this password so the app can be
+// tried out as any role. Not a pattern to carry into a real deployment.
+const DEMO_PASSWORD = "Committee2026!";
 
 function dayOffset(days: number, hour = 17, minute = 0): string {
   const d = new Date();
@@ -19,21 +24,41 @@ function dayOffset(days: number, hour = 17, minute = 0): string {
 }
 
 export const members: Member[] = [
-  { id: "m1", name: "Michael Zhang", initials: "MZ", color: "#4f46e5", role: "Tech Lead", accessRole: "IT Director" },
-  { id: "m2", name: "Yahya Al-Rawi", initials: "YA", color: "#0ea5e9", role: "Backend", accessRole: "Events Director" },
-  { id: "m3", name: "Nathanael Khor", initials: "NK", color: "#16a34a", role: "Frontend", accessRole: "Marketing Director" },
-  { id: "m4", name: "YunSoo Jin", initials: "YJ", color: "#db2777", role: "Full-stack", accessRole: "Committee Director" },
-  { id: "m5", name: "Sener Sethi", initials: "SS", color: "#f59e0b", role: "QA & Docs", accessRole: "Committee Member" },
+  { id: "m1", name: "Michael Zhang", initials: "MZ", color: "#4f46e5", role: "Tech Lead", accessRole: "IT Director", email: "michael@cca.org.au", passwordHash: hashPassword(DEMO_PASSWORD) },
+  { id: "m2", name: "Yahya Al-Rawi", initials: "YA", color: "#0ea5e9", role: "Backend", accessRole: "Events Director", email: "yahya@cca.org.au", passwordHash: hashPassword(DEMO_PASSWORD) },
+  { id: "m3", name: "Nathanael Khor", initials: "NK", color: "#16a34a", role: "Frontend", accessRole: "Marketing Director", email: "nathanael@cca.org.au", passwordHash: hashPassword(DEMO_PASSWORD) },
+  { id: "m4", name: "YunSoo Jin", initials: "YJ", color: "#db2777", role: "Full-stack", accessRole: "Committee Director", email: "yunsoo@cca.org.au", passwordHash: hashPassword(DEMO_PASSWORD) },
+  { id: "m5", name: "Sener Sethi", initials: "SS", color: "#f59e0b", role: "QA & Docs", accessRole: "Committee Member", email: "sener@cca.org.au", passwordHash: hashPassword(DEMO_PASSWORD) },
 ];
 
-export const currentUserId = "m1";
+// The identity of the signed-in member for the current request. Real
+// requests set this from the session cookie (see lib/auth.ts); it defaults
+// to m1 so the existing unit tests — which exercise permission logic
+// directly and have no HTTP session — keep working unchanged.
+export let currentUserId = "m1";
+
+export function setCurrentUserId(id: string): void {
+  currentUserId = id;
+}
 
 export function getCurrentUser(): Member {
   return members.find((member) => member.id === currentUserId)!;
 }
 
+export function getMemberByEmail(email: string): Member | undefined {
+  const target = email.trim().toLowerCase();
+  return members.find((member) => member.email.toLowerCase() === target);
+}
+
 export function hasPermission(permission: Permission, member = getCurrentUser()): boolean {
   return ROLE_PERMISSIONS[member.accessRole].includes(permission);
+}
+
+// Committee Directors (and other manage_tasks roles) can update any task.
+// Committee Members can only update the status of tasks assigned to them.
+export function canUpdateTask(task: Task, member = getCurrentUser()): boolean {
+  if (hasPermission("manage_tasks", member)) return true;
+  return hasPermission("update_own_tasks", member) && task.assigneeIds.includes(member.id);
 }
 
 export function updateMemberAccessRole(memberId: string, accessRole: AccessRole): void {
@@ -375,11 +400,12 @@ export interface DashboardStats {
   completionRate: number;
 }
 
-export function getDashboardStats(): DashboardStats {
+export function getDashboardStats(memberId?: string): DashboardStats {
+  const scope = memberId ? tasks.filter((t) => t.assigneeIds.includes(memberId)) : tasks;
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   let open = 0, inProgress = 0, overdue = 0, dueThisWeek = 0, done = 0;
-  for (const task of tasks) {
+  for (const task of scope) {
     if (task.status === "DONE") { done += 1; continue; }
     open += 1;
     if (task.status === "IN_PROGRESS") inProgress += 1;
@@ -391,7 +417,7 @@ export function getDashboardStats(): DashboardStats {
       else if (daysUntil <= 7) dueThisWeek += 1;
     }
   }
-  const total = tasks.length;
+  const total = scope.length;
   return {
     open, inProgress, overdue, dueThisWeek, done, total,
     completionRate: total ? Math.round((done / total) * 100) : 0,

@@ -6,8 +6,9 @@ export async function freshWorkspace() {
   const data = await import("@/lib/data");
   const events = await import("@/app/events/actions");
   const tasks = await import("@/app/tasks/actions");
+  const app = await import("@/app/actions");
   const actAs = (role: AccessRole) => data.updateMemberAccessRole(data.currentUserId, role);
-  return { data, events, tasks, actAs };
+  return { data, events, tasks, app, actAs };
 }
 
 export function hoursFromNow(hours: number): string {

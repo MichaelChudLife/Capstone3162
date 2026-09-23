@@ -3,6 +3,7 @@ import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
 import NewEventButton from "@/components/NewEventButton";
 import { getEvents, getMembersByIds, getTasksForEvent, hasPermission } from "@/lib/data";
+import { requireCurrentMember } from "@/lib/auth";
 import { AvatarStack, StatusPill } from "@/components/ui";
 import { MapPinIcon, CalendarIcon } from "@/components/icons";
 
@@ -20,12 +21,13 @@ export const dynamic = "force-dynamic";
 
 const PREVIEW_COUNT = 3;
 
-export default function EventsPage() {
+export default async function EventsPage() {
+  const user = await requireCurrentMember();
   const events = getEvents();
-  const canManageEvents = hasPermission("manage_events");
+  const canManageEvents = hasPermission("manage_events", user);
 
   return (
-    <AppShell>
+    <AppShell user={user}>
       <div className="space-y-6">
         <PageHeader
           title="Events"

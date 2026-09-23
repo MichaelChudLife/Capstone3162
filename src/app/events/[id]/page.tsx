@@ -7,6 +7,7 @@ import NewTaskButton from "@/components/NewTaskButton";
 import { AvatarStack, DueText, PriorityInline, StatusPill, UnassignedFlag, assigneeNames } from "@/components/ui";
 import { CalendarIcon, MapPinIcon } from "@/components/icons";
 import { getEventById, getEvents, getMembers, getMembersByIds, getTasksForEvent, hasPermission } from "@/lib/data";
+import { requireCurrentMember } from "@/lib/auth";
 import { daysUntil } from "@/lib/format";
 import { STATUS_LABEL, STATUS_ORDER } from "@/lib/types";
 
@@ -22,6 +23,7 @@ function countdown(iso: string): string {
 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const user = await requireCurrentMember();
   const event = getEventById(id);
   if (!event) notFound();
 
@@ -29,12 +31,12 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const done = subTasks.filter((t) => t.status === "DONE").length;
   const pct = subTasks.length ? Math.round((done / subTasks.length) * 100) : 0;
   const unassigned = subTasks.filter((t) => t.assigneeIds.length === 0 && t.status !== "DONE").length;
-  const canManageEvents = hasPermission("manage_events");
-  const canManageTasks = hasPermission("manage_tasks");
+  const canManageEvents = hasPermission("manage_events", user);
+  const canManageTasks = hasPermission("manage_tasks", user);
   const date = new Date(event.date);
 
   return (
-    <AppShell>
+    <AppShell user={user}>
       <nav className="mb-3 text-sm text-[var(--muted)]">
         <Link href="/events" className="hover:text-[var(--ink)] hover:underline">
           ← All events

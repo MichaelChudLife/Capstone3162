@@ -1,18 +1,11 @@
 import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
-import { getCurrentUser, getMembers } from "@/lib/data";
+import { getMembers } from "@/lib/data";
+import { requireCurrentMember } from "@/lib/auth";
 import { Avatar } from "@/components/ui";
 import RoleSelect from "@/components/RoleSelect";
 
 export const dynamic = "force-dynamic";
-
-const emailByMember: Record<string, string> = {
-  m1: "michael@cca.org.au",
-  m2: "yahya@cca.org.au",
-  m3: "nathanael@cca.org.au",
-  m4: "yunsoo@cca.org.au",
-  m5: "sener@cca.org.au",
-};
 
 const perms: { role: string; desc: string }[] = [
   { role: "IT Director", desc: "Manage every member's access and all workspace content" },
@@ -23,12 +16,13 @@ const perms: { role: string; desc: string }[] = [
   { role: "Committee Member", desc: "View workspace information and assigned work" },
 ];
 
-export default function MembersPage() {
+export default async function MembersPage() {
+  const user = await requireCurrentMember();
   const members = getMembers();
-  const canManageAccess = getCurrentUser().accessRole === "IT Director";
+  const canManageAccess = user.accessRole === "IT Director";
 
   return (
-    <AppShell>
+    <AppShell user={user}>
       <PageHeader title="Members" subtitle="Assign access by responsibility. Only the IT Director can change a role." />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -51,7 +45,7 @@ export default function MembersPage() {
               <Avatar member={m} size={40} />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-[var(--ink)]">{m.name}</div>
-                <div className="text-xs text-[var(--muted)]">{emailByMember[m.id]}</div>
+                <div className="text-xs text-[var(--muted)]">{m.email}</div>
               </div>
               <span className="hidden text-xs text-[var(--muted)] sm:block">{m.role}</span>
               <RoleSelect memberId={m.id} value={m.accessRole} disabled={!canManageAccess} />
