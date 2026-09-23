@@ -1,4 +1,4 @@
-import type { Member, CcaEvent, Task, TaskStatus, Priority } from "./types";
+import { ROLE_PERMISSIONS, type AccessRole, type Member, type CcaEvent, type Task, type TaskStatus, type Priority, type Permission } from "./types";
 
 function dayOffset(days: number, hour = 17, minute = 0): string {
   const d = new Date();
@@ -8,12 +8,27 @@ function dayOffset(days: number, hour = 17, minute = 0): string {
 }
 
 export const members: Member[] = [
-  { id: "m1", name: "Michael Zhang", initials: "MZ", color: "#4f46e5", role: "Tech Lead" },
-  { id: "m2", name: "Yahya Al-Rawi", initials: "YA", color: "#0ea5e9", role: "Backend" },
-  { id: "m3", name: "Nathanael Khor", initials: "NK", color: "#16a34a", role: "Frontend" },
-  { id: "m4", name: "YunSoo Jin", initials: "YJ", color: "#db2777", role: "Full-stack" },
-  { id: "m5", name: "Sener Sethi", initials: "SS", color: "#f59e0b", role: "QA & Docs" },
+  { id: "m1", name: "Michael Zhang", initials: "MZ", color: "#4f46e5", role: "Tech Lead", accessRole: "IT Director" },
+  { id: "m2", name: "Yahya Al-Rawi", initials: "YA", color: "#0ea5e9", role: "Backend", accessRole: "Events Director" },
+  { id: "m3", name: "Nathanael Khor", initials: "NK", color: "#16a34a", role: "Frontend", accessRole: "Marketing Director" },
+  { id: "m4", name: "YunSoo Jin", initials: "YJ", color: "#db2777", role: "Full-stack", accessRole: "Committee Director" },
+  { id: "m5", name: "Sener Sethi", initials: "SS", color: "#f59e0b", role: "QA & Docs", accessRole: "Committee Member" },
 ];
+
+export const currentUserId = "m1";
+
+export function getCurrentUser(): Member {
+  return members.find((member) => member.id === currentUserId)!;
+}
+
+export function hasPermission(permission: Permission, member = getCurrentUser()): boolean {
+  return ROLE_PERMISSIONS[member.accessRole].includes(permission);
+}
+
+export function updateMemberAccessRole(memberId: string, accessRole: AccessRole): void {
+  const member = members.find((item) => item.id === memberId);
+  if (member) member.accessRole = accessRole;
+}
 
 export const events: CcaEvent[] = [
   {

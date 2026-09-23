@@ -1,18 +1,10 @@
 import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
-import { getMembers } from "@/lib/data";
+import { getCurrentUser, getMembers } from "@/lib/data";
 import { Avatar } from "@/components/ui";
-import RoleSelect, { type Role } from "@/components/RoleSelect";
+import RoleSelect from "@/components/RoleSelect";
 
 export const dynamic = "force-dynamic";
-
-const roleByMember: Record<string, Role> = {
-  m1: "IT Admin",
-  m4: "Committee Director",
-  m2: "Committee Member",
-  m3: "Committee Member",
-  m5: "Committee Member",
-};
 
 const emailByMember: Record<string, string> = {
   m1: "michael@cca.org.au",
@@ -23,19 +15,23 @@ const emailByMember: Record<string, string> = {
 };
 
 const perms: { role: string; desc: string }[] = [
-  { role: "IT Admin", desc: "Manage members, roles and invites" },
-  { role: "Committee Director", desc: "Full create & edit of events and tasks" },
-  { role: "Committee Member", desc: "View events; update self-assigned tasks" },
+  { role: "IT Director", desc: "Manage every member's access and all workspace content" },
+  { role: "Committee Director", desc: "Create and manage events and tasks" },
+  { role: "Events Director", desc: "Manage event planning and event-linked work" },
+  { role: "Marketing Director", desc: "View workspace information for marketing delivery" },
+  { role: "Finance Director", desc: "View workspace information for finance delivery" },
+  { role: "Committee Member", desc: "View workspace information and assigned work" },
 ];
 
 export default function MembersPage() {
   const members = getMembers();
+  const canManageAccess = getCurrentUser().accessRole === "IT Director";
 
   return (
     <AppShell>
-      <PageHeader title="Members" subtitle="Committee members and their access roles. Only IT Admins can change a role." />
+      <PageHeader title="Members" subtitle="Assign access by responsibility. Only the IT Director can change a role." />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {perms.map((p) => (
           <div key={p.role} className="card p-4">
             <div className="text-sm font-semibold text-[var(--ink)]">{p.role}</div>
@@ -58,7 +54,7 @@ export default function MembersPage() {
                 <div className="text-xs text-[var(--muted)]">{emailByMember[m.id]}</div>
               </div>
               <span className="hidden text-xs text-[var(--muted)] sm:block">{m.role}</span>
-              <RoleSelect value={roleByMember[m.id]} />
+              <RoleSelect memberId={m.id} value={m.accessRole} disabled={!canManageAccess} />
             </li>
           ))}
         </ul>

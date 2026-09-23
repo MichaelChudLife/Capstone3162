@@ -19,12 +19,22 @@ enum Priority {
   HIGH
 }
 
+enum AccessRole {
+  IT_DIRECTOR
+  COMMITTEE_DIRECTOR
+  EVENTS_DIRECTOR
+  MARKETING_DIRECTOR
+  FINANCE_DIRECTOR
+  COMMITTEE_MEMBER
+}
+
 model Member {
   id       String @id @default(cuid())
   name     String
   initials String
   color    String
   role     String
+  accessRole AccessRole @default(COMMITTEE_MEMBER)
   tasks    Task[]
 }
 

@@ -1,4 +1,4 @@
-import { getReminders, getMembers, getEvents } from "@/lib/data";
+import { getReminders, getMembers, getEvents, hasPermission } from "@/lib/data";
 import { dueLabel } from "@/lib/format";
 import NotificationsBell, { type BellItem } from "@/components/NotificationsBell";
 import NewTaskButton from "@/components/NewTaskButton";
@@ -18,7 +18,7 @@ export default function PageHeader({ title, subtitle }: { title: string; subtitl
         {subtitle && <p className="mt-1 text-sm text-[var(--muted)]">{subtitle}</p>}
       </div>
       <div className="flex items-center gap-3">
-        <NewTaskButton members={getMembers()} events={getEvents()} />
+        {hasPermission("manage_tasks") && <NewTaskButton members={getMembers()} events={getEvents()} />}
         <NotificationsBell items={items} />
         <span
           className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
