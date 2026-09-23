@@ -1,4 +1,15 @@
-import { ROLE_PERMISSIONS, type AccessRole, type Member, type CcaEvent, type Task, type TaskStatus, type Priority, type Permission } from "./types";
+import {
+  ROLE_PERMISSIONS,
+  type AccessRole,
+  type Member,
+  type CcaEvent,
+  type Task,
+  type TaskStatus,
+  type Priority,
+  type Permission,
+  type EventInput,
+  type TaskInput,
+} from "./types";
 
 function dayOffset(days: number, hour = 17, minute = 0): string {
   const d = new Date();
@@ -69,7 +80,7 @@ export const tasks: Task[] = [
     status: "IN_PROGRESS",
     priority: "HIGH",
     dueDate: dayOffset(-1),
-    assigneeId: "m4",
+    assigneeIds: ["m4"],
     eventId: "e2",
     createdAt: dayOffset(-6),
   },
@@ -80,7 +91,7 @@ export const tasks: Task[] = [
     status: "IN_PROGRESS",
     priority: "MEDIUM",
     dueDate: dayOffset(2),
-    assigneeId: "m3",
+    assigneeIds: ["m3", "m4"],
     eventId: "e1",
     createdAt: dayOffset(-4),
   },
@@ -91,7 +102,7 @@ export const tasks: Task[] = [
     status: "TODO",
     priority: "HIGH",
     dueDate: dayOffset(1),
-    assigneeId: "m2",
+    assigneeIds: ["m2"],
     eventId: "e1",
     createdAt: dayOffset(-3),
   },
@@ -102,7 +113,7 @@ export const tasks: Task[] = [
     status: "TODO",
     priority: "MEDIUM",
     dueDate: dayOffset(4),
-    assigneeId: "m5",
+    assigneeIds: ["m5"],
     eventId: "e3",
     createdAt: dayOffset(-2),
   },
@@ -113,7 +124,7 @@ export const tasks: Task[] = [
     status: "TODO",
     priority: "LOW",
     dueDate: dayOffset(10),
-    assigneeId: "m1",
+    assigneeIds: ["m1"],
     eventId: "e3",
     createdAt: dayOffset(-1),
   },
@@ -124,7 +135,7 @@ export const tasks: Task[] = [
     status: "TODO",
     priority: "MEDIUM",
     dueDate: dayOffset(0, 12, 0),
-    assigneeId: "m1",
+    assigneeIds: ["m1"],
     eventId: "e4",
     createdAt: dayOffset(-1),
   },
@@ -135,7 +146,7 @@ export const tasks: Task[] = [
     status: "TODO",
     priority: "HIGH",
     dueDate: dayOffset(3),
-    assigneeId: "m4",
+    assigneeIds: ["m4"],
     eventId: "e1",
     createdAt: dayOffset(-2),
   },
@@ -146,7 +157,7 @@ export const tasks: Task[] = [
     status: "DONE",
     priority: "MEDIUM",
     dueDate: dayOffset(-4),
-    assigneeId: "m3",
+    assigneeIds: ["m3"],
     eventId: "e2",
     createdAt: dayOffset(-8),
   },
@@ -157,7 +168,7 @@ export const tasks: Task[] = [
     status: "DONE",
     priority: "LOW",
     dueDate: dayOffset(-6),
-    assigneeId: "m5",
+    assigneeIds: ["m5"],
     eventId: null,
     createdAt: dayOffset(-10),
   },
@@ -168,7 +179,7 @@ export const tasks: Task[] = [
     status: "TODO",
     priority: "LOW",
     dueDate: dayOffset(2, 12, 0),
-    assigneeId: "m2",
+    assigneeIds: ["m2"],
     eventId: "e2",
     createdAt: dayOffset(-1),
   },
@@ -179,7 +190,7 @@ export const tasks: Task[] = [
     status: "IN_PROGRESS",
     priority: "HIGH",
     dueDate: dayOffset(6),
-    assigneeId: "m1",
+    assigneeIds: ["m1", "m2"],
     eventId: "e1",
     createdAt: dayOffset(-2),
   },
@@ -190,7 +201,7 @@ export const tasks: Task[] = [
     status: "IN_PROGRESS",
     priority: "HIGH",
     dueDate: dayOffset(-1),
-    assigneeId: "m1",
+    assigneeIds: ["m1"],
     eventId: "e1",
     createdAt: dayOffset(-7),
   },
@@ -201,13 +212,32 @@ export const tasks: Task[] = [
     status: "DONE",
     priority: "LOW",
     dueDate: dayOffset(-1),
-    assigneeId: "m1",
+    assigneeIds: ["m1"],
     eventId: "e1",
     createdAt: dayOffset(-9),
+  },
+  {
+    id: "t14",
+    title: "Recruit event photographers",
+    description: "Find two volunteers to cover photos for socials on the night.",
+    status: "TODO",
+    priority: "MEDIUM",
+    dueDate: dayOffset(5),
+    assigneeIds: [],
+    eventId: "e1",
+    createdAt: dayOffset(-1),
   },
 ];
 
 let taskSeq = tasks.length;
+let eventSeq = events.length;
+
+const PRIORITY_RANK: Record<Priority, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+
+export function compareByDeadlineThenPriority(a: Task, b: Task): number {
+  const due = (a.dueDate ?? "9").localeCompare(b.dueDate ?? "9");
+  return due !== 0 ? due : PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+}
 
 export function getMembers(): Member[] {
   return members;
@@ -216,6 +246,10 @@ export function getMembers(): Member[] {
 export function getMemberById(id: string | null): Member | undefined {
   if (!id) return undefined;
   return members.find((m) => m.id === id);
+}
+
+export function getMembersByIds(ids: string[]): Member[] {
+  return ids.map((id) => members.find((m) => m.id === id)).filter((m): m is Member => Boolean(m));
 }
 
 export function getEvents(): CcaEvent[] {
@@ -227,8 +261,50 @@ export function getEventById(id: string | null): CcaEvent | undefined {
   return events.find((e) => e.id === id);
 }
 
+export function createEvent(input: EventInput): CcaEvent {
+  eventSeq += 1;
+  const event: CcaEvent = {
+    id: `e${eventSeq}`,
+    title: input.title,
+    description: input.description,
+    date: input.date,
+    location: input.location,
+  };
+  events.push(event);
+  return event;
+}
+
+export function updateEvent(id: string, input: EventInput): CcaEvent | undefined {
+  const event = events.find((e) => e.id === id);
+  if (!event) return undefined;
+  Object.assign(event, input);
+  return event;
+}
+
+export function deleteEvent(id: string): { event: CcaEvent; removedTaskIds: string[] } | undefined {
+  const index = events.findIndex((e) => e.id === id);
+  if (index === -1) return undefined;
+  const [event] = events.splice(index, 1);
+  const removedTaskIds: string[] = [];
+  for (let i = tasks.length - 1; i >= 0; i -= 1) {
+    if (tasks[i].eventId === id) {
+      removedTaskIds.push(tasks[i].id);
+      tasks.splice(i, 1);
+    }
+  }
+  return { event, removedTaskIds: removedTaskIds.reverse() };
+}
+
 export function getTasks(): Task[] {
   return tasks;
+}
+
+export function getTaskById(id: string): Task | undefined {
+  return tasks.find((t) => t.id === id);
+}
+
+export function getTasksForEvent(eventId: string): Task[] {
+  return tasks.filter((t) => t.eventId === eventId).sort(compareByDeadlineThenPriority);
 }
 
 export function getTasksByStatus(status: TaskStatus): Task[] {
@@ -237,17 +313,7 @@ export function getTasksByStatus(status: TaskStatus): Task[] {
     .sort((a, b) => (a.dueDate ?? "9").localeCompare(b.dueDate ?? "9"));
 }
 
-export interface NewTaskInput {
-  title: string;
-  description: string;
-  priority: Priority;
-  dueDate: string | null;
-  assigneeId: string | null;
-  eventId: string | null;
-  status: TaskStatus;
-}
-
-export function createTask(input: NewTaskInput): Task {
+export function createTask(input: TaskInput): Task {
   taskSeq += 1;
   const task: Task = {
     id: `t${taskSeq}`,
@@ -256,11 +322,18 @@ export function createTask(input: NewTaskInput): Task {
     status: input.status,
     priority: input.priority,
     dueDate: input.dueDate,
-    assigneeId: input.assigneeId,
+    assigneeIds: [...input.assigneeIds],
     eventId: input.eventId,
     createdAt: new Date().toISOString(),
   };
   tasks.push(task);
+  return task;
+}
+
+export function updateTask(id: string, input: TaskInput): Task | undefined {
+  const task = tasks.find((t) => t.id === id);
+  if (!task) return undefined;
+  Object.assign(task, { ...input, assigneeIds: [...input.assigneeIds] });
   return task;
 }
 
