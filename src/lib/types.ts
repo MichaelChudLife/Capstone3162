@@ -8,7 +8,12 @@ export type AccessRole =
   | "Finance Director"
   | "Committee Member";
 
-export type Permission = "manage_access" | "manage_tasks" | "manage_events" | "view_workspace";
+export type Permission =
+  | "manage_access"
+  | "manage_tasks"
+  | "manage_events"
+  | "view_workspace"
+  | "update_own_tasks";
 
 export const ACCESS_ROLES: AccessRole[] = [
   "IT Director",
@@ -25,7 +30,7 @@ export const ROLE_PERMISSIONS: Record<AccessRole, Permission[]> = {
   "Events Director": ["manage_events", "view_workspace"],
   "Marketing Director": ["view_workspace"],
   "Finance Director": ["view_workspace"],
-  "Committee Member": ["view_workspace"],
+  "Committee Member": ["view_workspace", "update_own_tasks"],
 };
 
 export interface Member {
@@ -35,6 +40,8 @@ export interface Member {
   color: string;
   role: string;
   accessRole: AccessRole;
+  email: string;
+  passwordHash: string;
 }
 
 export interface CcaEvent {

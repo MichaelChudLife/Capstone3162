@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import PageHeader from "@/components/PageHeader";
 import EditTaskButton from "@/components/EditTaskButton";
+import MoveMenu from "@/components/MoveMenu";
 import { Avatar, DueBadge, PriorityTag, StatusPill, UnassignedFlag } from "@/components/ui";
 import { CalendarIcon } from "@/components/icons";
-import { getEventById, getEvents, getMembers, getMembersByIds, getTaskById, hasPermission } from "@/lib/data";
+import { getEventById, getEvents, getMembers, getMembersByIds, getTaskById, hasPermission, canUpdateTask } from "@/lib/data";
+import { requireCurrentMember } from "@/lib/auth";
 import { formatDateTime, formatDeadline } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -21,15 +23,17 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
 
 export default async function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const user = await requireCurrentMember();
   const task = getTaskById(id);
   if (!task) notFound();
 
   const event = getEventById(task.eventId);
   const assignees = getMembersByIds(task.assigneeIds);
-  const canEdit = hasPermission("manage_tasks");
+  const canEdit = hasPermission("manage_tasks", user);
+  const canUpdate = canUpdateTask(task, user);
 
   return (
-    <AppShell>
+    <AppShell user={user}>
       <nav className="mb-3 flex items-center gap-1.5 text-sm text-[var(--muted)]">
         <Link href="/tasks" className="hover:text-[var(--ink)] hover:underline">
           Tasks
@@ -52,6 +56,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <StatusPill status={task.status} />
+        {canUpdate && !canEdit && <MoveMenu taskId={task.id} status={task.status} />}
         <PriorityTag priority={task.priority} />
         {task.dueDate && task.status !== "DONE" && <DueBadge dueDate={task.dueDate} />}
         {assignees.length === 0 && <UnassignedFlag />}

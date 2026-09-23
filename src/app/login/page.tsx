@@ -1,5 +1,6 @@
-const fieldClass =
-  "w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3.5 py-3 text-sm text-[var(--ink)] outline-none focus:border-[var(--brand)]";
+import { redirect } from "next/navigation";
+import { getSessionMemberId } from "@/lib/auth";
+import LoginForm from "@/components/LoginForm";
 
 function Flame() {
   return (
@@ -16,7 +17,10 @@ function Check() {
   );
 }
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const memberId = await getSessionMemberId();
+  if (memberId) redirect("/");
+
   const features = [
     "Events and tasks in one shared workspace",
     "Deadline reminders before things slip",
@@ -59,26 +63,13 @@ export default function LoginPage() {
           <h2 className="text-2xl font-bold tracking-tight text-[var(--ink)]">Welcome back</h2>
           <p className="mt-1.5 text-sm text-[var(--muted)]">Log in to the CCA committee workspace.</p>
 
-          <div className="mt-7 space-y-4">
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-[var(--muted)]">Email</label>
-              <input className={fieldClass} type="email" defaultValue="michael@cca.org.au" />
-            </div>
-            <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <label className="text-xs font-semibold text-[var(--muted)]">Password</label>
-                <span className="text-xs font-medium text-[var(--brand-strong)]">Forgot password?</span>
-              </div>
-              <input className={fieldClass} type="password" defaultValue="cca-committee-2026" />
-            </div>
-
-            <button className="w-full rounded-xl bg-[var(--brand)] py-3 text-sm font-semibold text-[var(--brand-contrast)] hover:bg-[var(--brand-strong)]">
-              Log in
-            </button>
-          </div>
+          <LoginForm />
 
           <div className="mt-6 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 text-xs leading-relaxed text-[var(--muted)]">
             <span className="font-semibold text-[var(--ink)]">Invite-only.</span> Ask a committee IT Admin for an invite. Sessions expire after 30 minutes of inactivity.
+            <div className="mt-2">
+              <span className="font-semibold text-[var(--ink)]">Demo login:</span> any member email (e.g. yunsoo@cca.org.au) · password <code>Committee2026!</code>
+            </div>
           </div>
         </div>
       </div>

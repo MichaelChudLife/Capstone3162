@@ -1,7 +1,8 @@
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
-import { getTasks, getEvents, getEventById, getDashboardStats, currentUserId } from "@/lib/data";
+import { getTasks, getEvents, getEventById, getDashboardStats } from "@/lib/data";
+import { requireCurrentMember } from "@/lib/auth";
 import { StatusPill, PriorityInline, DueText } from "@/components/ui";
 import { daysUntil } from "@/lib/format";
 import { AlertIcon } from "@/components/icons";
@@ -23,43 +24,45 @@ function ChevronRight() {
   );
 }
 
-export default function DashboardPage() {
-  const stats = getDashboardStats();
+export default async function DashboardPage() {
+  const user = await requireCurrentMember();
+  const stats = getDashboardStats(user.id);
   const events = getEvents();
   const tasks = getTasks();
 
-  const within48 = tasks.filter((t) => {
+  const myTasksAll = tasks.filter((t) => t.assigneeIds.includes(user.id));
+
+  const within48 = myTasksAll.filter((t) => {
     if (t.status === "DONE" || !t.dueDate) return false;
     const hrs = (new Date(t.dueDate).getTime() - Date.now()) / 3600000;
     return hrs >= 0 && hrs <= 48;
   }).length;
 
-  const myTasks = tasks
-    .filter((t) => t.assigneeIds.includes(currentUserId))
-    .sort((a, b) => {
-      if (a.status === "DONE" !== (b.status === "DONE")) return a.status === "DONE" ? 1 : -1;
-      return (a.dueDate ?? "9").localeCompare(b.dueDate ?? "9");
-    });
+  const myTasks = myTasksAll.slice().sort((a, b) => {
+    if (a.status === "DONE" !== (b.status === "DONE")) return a.status === "DONE" ? 1 : -1;
+    return (a.dueDate ?? "9").localeCompare(b.dueDate ?? "9");
+  });
 
   const today = new Date();
-  const dateLine = `${today.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })} · ${greeting()}, Michael`;
+  const firstName = user.name.split(" ")[0];
+  const dateLine = `${today.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })} · ${greeting()}, ${firstName}`;
 
   const tiles = [
     { label: "Overdue", value: stats.overdue, danger: true },
     { label: "Due this week", value: stats.dueThisWeek },
-    { label: "Open tasks", value: stats.open },
+    { label: "My open tasks", value: stats.open },
     { label: "Events", value: events.length },
   ];
 
   return (
-    <AppShell>
+    <AppShell user={user}>
       <PageHeader title="Dashboard" subtitle={dateLine} />
 
       {stats.overdue > 0 && (
         <div className="mb-5 flex items-center justify-between rounded-xl bg-[var(--danger-soft)] px-4 py-3">
           <div className="flex items-center gap-2.5 text-sm font-medium text-[var(--danger)]">
             <AlertIcon width={17} height={17} />
-            {stats.overdue} task{stats.overdue > 1 ? "s are" : " is"} overdue · {within48} deadline{within48 === 1 ? "" : "s"} within 48 hours
+            {stats.overdue} of your task{stats.overdue > 1 ? "s are" : " is"} overdue · {within48} deadline{within48 === 1 ? "" : "s"} within 48 hours
           </div>
           <span className="text-sm font-semibold text-[var(--danger)]">Review →</span>
         </div>

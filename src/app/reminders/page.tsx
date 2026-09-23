@@ -2,6 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
 import Link from "next/link";
 import { getReminders, getMembersByIds, getEventById } from "@/lib/data";
+import { requireCurrentMember } from "@/lib/auth";
 import { AvatarStack, DueBadge, PriorityTag, UnassignedFlag, assigneeNames } from "@/components/ui";
 import { AlertIcon, ClockIcon, BellIcon } from "@/components/icons";
 import type { Reminder } from "@/lib/data";
@@ -14,11 +15,12 @@ const groups = [
 
 export const dynamic = "force-dynamic";
 
-export default function RemindersPage() {
+export default async function RemindersPage() {
+  const user = await requireCurrentMember();
   const reminders = getReminders();
 
   return (
-    <AppShell>
+    <AppShell user={user}>
       <div className="space-y-6">
       <PageHeader title="Reminders" subtitle={`Auto-generated from task deadlines. ${reminders.length} task${reminders.length === 1 ? "" : "s"} need attention.`} />
 
