@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createTask, getCurrentUser, hasPermission, setTaskStatus, updateMemberAccessRole, type NewTaskInput } from "@/lib/data";
+import { getCurrentUser, hasPermission, setTaskStatus, updateMemberAccessRole } from "@/lib/data";
 import { ACCESS_ROLES, type AccessRole, type TaskStatus } from "@/lib/types";
 
 function revalidateAll() {
@@ -9,12 +9,6 @@ function revalidateAll() {
   revalidatePath("/tasks");
   revalidatePath("/events");
   revalidatePath("/reminders");
-}
-
-export async function createTaskAction(input: NewTaskInput) {
-  if (!hasPermission("manage_tasks")) throw new Error("You do not have permission to create tasks.");
-  createTask(input);
-  revalidateAll();
 }
 
 export async function moveTaskAction(id: string, status: TaskStatus) {
