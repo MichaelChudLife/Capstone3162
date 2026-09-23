@@ -1,6 +1,7 @@
+import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
-import { getTasks, getEvents, getEventById, getDashboardStats } from "@/lib/data";
+import { getTasks, getEvents, getEventById, getDashboardStats, currentUserId } from "@/lib/data";
 import { StatusPill, PriorityInline, DueText } from "@/components/ui";
 import { daysUntil } from "@/lib/format";
 import { AlertIcon } from "@/components/icons";
@@ -34,7 +35,7 @@ export default function DashboardPage() {
   }).length;
 
   const myTasks = tasks
-    .filter((t) => t.assigneeId === "m1")
+    .filter((t) => t.assigneeIds.includes(currentUserId))
     .sort((a, b) => {
       if (a.status === "DONE" !== (b.status === "DONE")) return a.status === "DONE" ? 1 : -1;
       return (a.dueDate ?? "9").localeCompare(b.dueDate ?? "9");
@@ -90,28 +91,30 @@ export default function DashboardPage() {
             const event = getEventById(task.eventId);
             const done = task.status === "DONE";
             return (
-              <li key={task.id} className="flex items-center gap-4 border-t border-[var(--border)] px-4 py-3.5">
-                <div className="w-28 shrink-0">
-                  <StatusPill status={task.status} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className={`truncate text-sm font-medium ${done ? "text-[var(--muted)] line-through" : "text-[var(--ink)]"}`}>
-                    {task.title}
+              <li key={task.id} className="border-t border-[var(--border)]">
+                <Link href={`/tasks/${task.id}`} className="flex items-center gap-4 px-4 py-3.5 hover:bg-[var(--surface-2)]">
+                  <div className="w-28 shrink-0">
+                    <StatusPill status={task.status} />
                   </div>
-                  <div className="mt-1 flex items-center gap-2 text-xs text-[var(--muted)]">
-                    <span className="truncate">{event?.title ?? "General"}</span>
-                    <span>·</span>
-                    <PriorityInline priority={task.priority} />
+                  <div className="min-w-0 flex-1">
+                    <div className={`truncate text-sm font-medium ${done ? "text-[var(--muted)] line-through" : "text-[var(--ink)]"}`}>
+                      {task.title}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-[var(--muted)]">
+                      <span className="truncate">{event?.title ?? "General"}</span>
+                      <span>·</span>
+                      <PriorityInline priority={task.priority} />
+                    </div>
                   </div>
-                </div>
-                <div className="shrink-0 text-right">
-                  {done ? (
-                    <span className="text-sm text-[var(--muted)]">Completed</span>
-                  ) : (
-                    <DueText dueDate={task.dueDate} />
-                  )}
-                </div>
-                <ChevronRight />
+                  <div className="shrink-0 text-right">
+                    {done ? (
+                      <span className="text-sm text-[var(--muted)]">Completed</span>
+                    ) : (
+                      <DueText dueDate={task.dueDate} />
+                    )}
+                  </div>
+                  <ChevronRight />
+                </Link>
               </li>
             );
           })}
@@ -121,7 +124,7 @@ export default function DashboardPage() {
       <section className="card p-2">
         <header className="flex items-center justify-between px-4 py-3">
           <h2 className="text-base font-semibold text-[var(--ink)]">Upcoming events</h2>
-          <span className="text-sm font-semibold text-[var(--brand)]">View all</span>
+          <Link href="/events" className="text-sm font-semibold text-[var(--brand)] hover:underline">View all</Link>
         </header>
         <ul>
           {events.slice(0, 3).map((ev) => {
@@ -137,9 +140,9 @@ export default function DashboardPage() {
                   <span className="text-lg font-bold leading-none text-[var(--ink)]">{date.toLocaleDateString("en-AU", { day: "2-digit" })}</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-[var(--ink)]">{ev.title}</div>
+                  <Link href={`/events/${ev.id}`} className="text-sm font-semibold text-[var(--ink)] hover:underline">{ev.title}</Link>
                   <div className="mt-0.5 text-xs text-[var(--muted)]">
-                    {date.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })} · {ev.location} · {remaining} task{remaining === 1 ? "" : "s"} remaining
+                    {date.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })} · {ev.location || "Location TBC"} · {remaining} task{remaining === 1 ? "" : "s"} remaining
                   </div>
                 </div>
                 {imminent ? (

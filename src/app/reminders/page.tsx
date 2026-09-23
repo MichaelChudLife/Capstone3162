@@ -1,7 +1,8 @@
 import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
-import { getReminders, getMemberById, getEventById } from "@/lib/data";
-import { Avatar, DueBadge, PriorityTag } from "@/components/ui";
+import Link from "next/link";
+import { getReminders, getMembersByIds, getEventById } from "@/lib/data";
+import { AvatarStack, DueBadge, PriorityTag, UnassignedFlag, assigneeNames } from "@/components/ui";
 import { AlertIcon, ClockIcon, BellIcon } from "@/components/icons";
 import type { Reminder } from "@/lib/data";
 
@@ -33,15 +34,18 @@ export default function RemindersPage() {
             </header>
             <ul className="divide-y divide-[var(--border)]">
               {items.map((r: Reminder) => {
-                const assignee = getMemberById(r.task.assigneeId);
+                const assignees = getMembersByIds(r.task.assigneeIds);
                 const event = getEventById(r.task.eventId);
                 return (
                   <li key={r.task.id} className="flex items-center gap-4 px-5 py-4">
-                    <Avatar member={assignee} size={38} />
+                    <AvatarStack members={assignees} size={34} max={2} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-[var(--ink)]">{r.task.title}</div>
-                      <div className="mt-0.5 truncate text-xs text-[var(--muted)]">
-                        {assignee?.name ?? "Unassigned"}{event ? ` · ${event.title}` : ""}
+                      <Link href={`/tasks/${r.task.id}`} className="block truncate text-sm font-medium text-[var(--ink)] hover:underline">
+                        {r.task.title}
+                      </Link>
+                      <div className="mt-0.5 flex items-center gap-2 truncate text-xs text-[var(--muted)]">
+                        {assignees.length > 0 ? assigneeNames(assignees) : <UnassignedFlag compact />}
+                        {event ? <span className="truncate">· {event.title}</span> : null}
                       </div>
                     </div>
                     <PriorityTag priority={r.task.priority} />

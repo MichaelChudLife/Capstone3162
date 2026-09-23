@@ -1,8 +1,9 @@
+import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
-import { getTasksByStatus, getMemberById, getEventById, getTasks } from "@/lib/data";
+import { getTasksByStatus, getMembersByIds, getEventById, getTasks } from "@/lib/data";
 import { STATUS_ORDER, STATUS_LABEL, type TaskStatus } from "@/lib/types";
-import { Avatar, DueBadge, PriorityTag } from "@/components/ui";
+import { AvatarStack, DueBadge, PriorityTag, UnassignedFlag, assigneeNames } from "@/components/ui";
 import MoveMenu from "@/components/MoveMenu";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export default function TasksPage() {
 
               <div className="flex flex-col gap-3">
                 {tasks.map((task) => {
-                  const assignee = getMemberById(task.assigneeId);
+                  const assignees = getMembersByIds(task.assigneeIds);
                   const event = getEventById(task.eventId);
                   return (
                     <article key={task.id} className="card p-4">
@@ -43,18 +44,29 @@ export default function TasksPage() {
                         <PriorityTag priority={task.priority} />
                         <MoveMenu taskId={task.id} status={task.status} />
                       </div>
-                      <h3 className="text-sm font-semibold leading-snug text-[var(--ink)]">{task.title}</h3>
+                      <h3 className="text-sm font-semibold leading-snug text-[var(--ink)]">
+                        <Link href={`/tasks/${task.id}`} className="hover:text-[var(--brand-strong)] hover:underline">
+                          {task.title}
+                        </Link>
+                      </h3>
                       <p className="mt-1 line-clamp-2 text-xs text-[var(--muted)]">{task.description}</p>
                       {event && (
-                        <div className="mt-3 inline-flex items-center rounded-md bg-[var(--brand-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--brand-strong)]">
+                        <Link
+                          href={`/events/${event.id}`}
+                          className="mt-3 inline-flex items-center rounded-md bg-[var(--brand-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--brand-strong)] hover:underline"
+                        >
                           {event.title}
-                        </div>
+                        </Link>
                       )}
-                      <div className="mt-3 flex items-center justify-between border-t border-[var(--border)] pt-3">
-                        <div className="flex items-center gap-2">
-                          <Avatar member={assignee} size={26} />
-                          <span className="text-xs text-[var(--muted)]">{assignee?.name.split(" ")[0] ?? "Unassigned"}</span>
-                        </div>
+                      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
+                        {assignees.length > 0 ? (
+                          <div className="flex min-w-0 items-center gap-2">
+                            <AvatarStack members={assignees} size={26} />
+                            <span className="truncate text-xs text-[var(--muted)]">{assigneeNames(assignees)}</span>
+                          </div>
+                        ) : (
+                          <UnassignedFlag compact />
+                        )}
                         {task.dueDate && <DueBadge dueDate={task.dueDate} />}
                       </div>
                     </article>
