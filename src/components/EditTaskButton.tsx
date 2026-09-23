@@ -4,7 +4,17 @@ import { useState } from "react";
 import TaskFormDialog from "@/components/TaskFormDialog";
 import type { CcaEvent, Member, Task } from "@/lib/types";
 
-export default function EditTaskButton({ task, members, events }: { task: Task; members: Member[]; events: CcaEvent[] }) {
+export default function EditTaskButton({
+  task,
+  members,
+  events,
+  restricted = false,
+}: {
+  task: Task;
+  members: Member[];
+  events: CcaEvent[];
+  restricted?: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -16,7 +26,14 @@ export default function EditTaskButton({ task, members, events }: { task: Task; 
         Edit task
       </button>
       {open && (
-        <TaskFormDialog open={open} onClose={() => setOpen(false)} members={members} events={events} task={task} />
+        <TaskFormDialog
+          open={open}
+          onClose={() => setOpen(false)}
+          members={members}
+          events={events}
+          task={task}
+          restricted={restricted}
+        />
       )}
     </>
   );

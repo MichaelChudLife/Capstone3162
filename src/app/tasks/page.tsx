@@ -1,7 +1,7 @@
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
-import { getTasksByStatus, getMembersByIds, getEventById, getTasks } from "@/lib/data";
+import { getTasksByStatus, getMembersByIds, getEventById, getTasks, canUpdateTask } from "@/lib/data";
 import { STATUS_ORDER, STATUS_LABEL, type TaskStatus } from "@/lib/types";
 import { AvatarStack, DueBadge, PriorityTag, UnassignedFlag, assigneeNames } from "@/components/ui";
 import MoveMenu from "@/components/MoveMenu";
@@ -42,7 +42,7 @@ export default function TasksPage() {
                     <article key={task.id} className="card p-4">
                       <div className="mb-2 flex items-start justify-between gap-2">
                         <PriorityTag priority={task.priority} />
-                        <MoveMenu taskId={task.id} status={task.status} />
+                        {canUpdateTask(task) && <MoveMenu taskId={task.id} status={task.status} />}
                       </div>
                       <h3 className="text-sm font-semibold leading-snug text-[var(--ink)]">
                         <Link href={`/tasks/${task.id}`} className="hover:text-[var(--brand-strong)] hover:underline">

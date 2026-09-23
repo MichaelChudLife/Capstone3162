@@ -9,14 +9,17 @@ export default function AssigneePicker({
   value,
   onChange,
   invalid = false,
+  disabled = false,
 }: {
   id?: string;
   members: Member[];
   value: string[];
   onChange: (ids: string[]) => void;
   invalid?: boolean;
+  disabled?: boolean;
 }) {
   function toggle(memberId: string) {
+    if (disabled) return;
     onChange(value.includes(memberId) ? value.filter((v) => v !== memberId) : [...value, memberId]);
   }
 
@@ -35,8 +38,11 @@ export default function AssigneePicker({
               key={m.id}
               type="button"
               aria-pressed={selected}
+              disabled={disabled}
               onClick={() => toggle(m.id)}
               className={`inline-flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-sm transition-colors ${
+                disabled ? "cursor-not-allowed opacity-60" : ""
+              } ${
                 selected
                   ? "border-[var(--brand)] bg-[var(--brand-soft)] font-medium text-[var(--brand-strong)]"
                   : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-2)]"

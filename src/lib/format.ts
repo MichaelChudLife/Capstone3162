@@ -63,6 +63,10 @@ export function fromDateTimeLocal(value: string): string {
   return Number.isNaN(d.getTime()) ? value : d.toISOString();
 }
 
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(amount);
+}
+
 export function formatDeadline(iso: string | null): string {
   if (!iso) return "No deadline";
   return new Date(iso).toLocaleString("en-AU", {

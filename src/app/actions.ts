@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getCurrentUser, hasPermission, setTaskStatus, updateMemberAccessRole } from "@/lib/data";
+import { canUpdateTask, getCurrentUser, getTaskById, hasPermission, setTaskStatus, updateMemberAccessRole } from "@/lib/data";
 import { ACCESS_ROLES, type AccessRole, type TaskStatus } from "@/lib/types";
 
 function revalidateAll() {
@@ -12,7 +12,9 @@ function revalidateAll() {
 }
 
 export async function moveTaskAction(id: string, status: TaskStatus) {
-  if (!hasPermission("manage_tasks")) throw new Error("You do not have permission to update tasks.");
+  const task = getTaskById(id);
+  if (!task) throw new Error("That task no longer exists.");
+  if (!canUpdateTask(task)) throw new Error("You do not have permission to update tasks.");
   setTaskStatus(id, status);
   revalidateAll();
 }

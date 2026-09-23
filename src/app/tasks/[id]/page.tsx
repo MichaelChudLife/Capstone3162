@@ -5,7 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import EditTaskButton from "@/components/EditTaskButton";
 import { Avatar, DueBadge, PriorityTag, StatusPill, UnassignedFlag } from "@/components/ui";
 import { CalendarIcon } from "@/components/icons";
-import { getEventById, getEvents, getMembers, getMembersByIds, getTaskById, hasPermission } from "@/lib/data";
+import { canUpdateTask, getEventById, getEvents, getMembers, getMembersByIds, getTaskById, hasPermission } from "@/lib/data";
 import { formatDateTime, formatDeadline } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,8 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
 
   const event = getEventById(task.eventId);
   const assignees = getMembersByIds(task.assigneeIds);
-  const canEdit = hasPermission("manage_tasks");
+  const canManageTasks = hasPermission("manage_tasks");
+  const canEdit = canUpdateTask(task);
 
   return (
     <AppShell>
@@ -47,7 +48,11 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
       <PageHeader
         title={task.title}
         subtitle={event ? `Sub-task of ${event.title}` : "General committee task"}
-        actions={canEdit ? <EditTaskButton task={task} members={getMembers()} events={getEvents()} /> : undefined}
+        actions={
+          canEdit ? (
+            <EditTaskButton task={task} members={getMembers()} events={getEvents()} restricted={!canManageTasks} />
+          ) : undefined
+        }
       />
 
       <div className="mb-5 flex flex-wrap items-center gap-2">

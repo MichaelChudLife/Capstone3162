@@ -16,11 +16,11 @@ const emailByMember: Record<string, string> = {
 
 const perms: { role: string; desc: string }[] = [
   { role: "IT Director", desc: "Manage every member's access and all workspace content" },
-  { role: "Committee Director", desc: "Create and manage events and tasks" },
+  { role: "Committee Director", desc: "Full create, edit and manage privileges over events and tasks" },
   { role: "Events Director", desc: "Manage event planning and event-linked work" },
   { role: "Marketing Director", desc: "View workspace information for marketing delivery" },
   { role: "Finance Director", desc: "View workspace information for finance delivery" },
-  { role: "Committee Member", desc: "View workspace information and assigned work" },
+  { role: "Committee Member", desc: "View events and update tasks assigned to them" },
 ];
 
 export default function MembersPage() {

@@ -64,6 +64,22 @@ export interface EventInput {
   location: string;
 }
 
+export interface BudgetItem {
+  id: string;
+  eventId: string;
+  label: string;
+  expectedCost: number;
+  actualCost: number;
+  recordedById: string | null;
+  createdAt: string;
+}
+
+export interface BudgetItemInput {
+  label: string;
+  expectedCost: number;
+  actualCost: number;
+}
+
 export interface TaskInput {
   title: string;
   description: string;

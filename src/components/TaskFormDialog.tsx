@@ -44,6 +44,7 @@ export default function TaskFormDialog({
   task,
   defaultEventId,
   lockEvent = false,
+  restricted = false,
   onSaved,
 }: {
   open: boolean;
@@ -53,6 +54,7 @@ export default function TaskFormDialog({
   task?: Task;
   defaultEventId?: string | null;
   lockEvent?: boolean;
+  restricted?: boolean;
   onSaved?: (id: string) => void;
 }) {
   const router = useRouter();
@@ -61,7 +63,8 @@ export default function TaskFormDialog({
   const [form, setForm] = useState(() => initialState(task, defaultEventId));
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const lockedEvent = lockEvent ? events.find((e) => e.id === form.eventId) : undefined;
+  const eventLocked = lockEvent || restricted;
+  const lockedEvent = eventLocked ? events.find((e) => e.id === form.eventId) : undefined;
   const minDue = toDateTimeLocal(new Date().toISOString());
 
   function update<K extends keyof ReturnType<typeof initialState>>(key: K, value: ReturnType<typeof initialState>[K]) {
@@ -117,11 +120,13 @@ export default function TaskFormDialog({
       width="max-w-xl"
       title={editing ? "Edit task" : lockedEvent ? "Add sub-task" : "New task"}
       description={
-        lockedEvent
-          ? `This task will sit under “${lockedEvent.title}”.`
-          : editing
-            ? "Update the details, assignees or deadline."
-            : "Create a task, assign it, and set a deadline."
+        restricted
+          ? "You can update the status and details of a task assigned to you, but not its assignees or event."
+          : lockedEvent
+            ? `This task will sit under “${lockedEvent.title}”.`
+            : editing
+              ? "Update the details, assignees or deadline."
+              : "Create a task, assign it, and set a deadline."
       }
       footer={
         <>
@@ -167,6 +172,7 @@ export default function TaskFormDialog({
             value={form.assigneeIds}
             onChange={(ids) => update("assigneeIds", ids)}
             invalid={Boolean(errors.assigneeIds)}
+            disabled={restricted}
           />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -187,7 +193,7 @@ export default function TaskFormDialog({
               id="task-event"
               className={fieldClass}
               value={form.eventId}
-              disabled={lockEvent}
+              disabled={eventLocked}
               onChange={(e) => update("eventId", e.target.value)}
               aria-invalid={Boolean(errors.eventId)}
             >

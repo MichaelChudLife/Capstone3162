@@ -4,9 +4,20 @@ import AppShell from "@/components/AppShell";
 import PageHeader from "@/components/PageHeader";
 import EventActions from "@/components/EventActions";
 import NewTaskButton from "@/components/NewTaskButton";
+import BudgetPanel from "@/components/BudgetPanel";
 import { AvatarStack, DueText, PriorityInline, StatusPill, UnassignedFlag, assigneeNames } from "@/components/ui";
 import { CalendarIcon, MapPinIcon } from "@/components/icons";
-import { getEventById, getEvents, getMembers, getMembersByIds, getTasksForEvent, hasPermission } from "@/lib/data";
+import {
+  canEditBudgetItem,
+  getBudgetItemsForEvent,
+  getEventBudgetSummary,
+  getEventById,
+  getEvents,
+  getMembers,
+  getMembersByIds,
+  getTasksForEvent,
+  hasPermission,
+} from "@/lib/data";
 import { daysUntil } from "@/lib/format";
 import { STATUS_LABEL, STATUS_ORDER } from "@/lib/types";
 
@@ -32,6 +43,9 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const canManageEvents = hasPermission("manage_events");
   const canManageTasks = hasPermission("manage_tasks");
   const date = new Date(event.date);
+  const budgetItems = getBudgetItemsForEvent(event.id);
+  const budgetSummary = getEventBudgetSummary(event.id);
+  const editableBudgetIds = budgetItems.filter((item) => canEditBudgetItem(item)).map((item) => item.id);
 
   return (
     <AppShell>
@@ -158,6 +172,16 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           })
         )}
       </section>
+
+      <div className="mt-6">
+        <BudgetPanel
+          eventId={event.id}
+          items={budgetItems}
+          summary={budgetSummary}
+          editableIds={editableBudgetIds}
+          members={getMembers()}
+        />
+      </div>
     </AppShell>
   );
 }

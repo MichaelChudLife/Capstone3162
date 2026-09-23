@@ -29,23 +29,25 @@ enum AccessRole {
 }
 
 model Member {
-  id         String     @id @default(cuid())
-  name       String
-  initials   String
-  color      String
-  role       String
-  accessRole AccessRole @default(COMMITTEE_MEMBER)
-  tasks      Task[]     @relation("TaskAssignees")
+  id           String       @id @default(cuid())
+  name         String
+  initials     String
+  color        String
+  role         String
+  accessRole   AccessRole   @default(COMMITTEE_MEMBER)
+  tasks        Task[]       @relation("TaskAssignees")
+  budgetItems  BudgetItem[]
 }
 
 model Event {
-  id          String   @id @default(cuid())
+  id          String       @id @default(cuid())
   title       String
   date        DateTime
-  location    String   @default("")
-  description String   @default("")
+  location    String       @default("")
+  description String       @default("")
   tasks       Task[]
-  createdAt   DateTime @default(now())
+  budgetItems BudgetItem[]
+  createdAt   DateTime     @default(now())
 }
 
 model Task {
@@ -59,6 +61,20 @@ model Task {
   event       Event?     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   eventId     String?
   createdAt   DateTime   @default(now())
+
+  @@index([eventId])
+}
+
+model BudgetItem {
+  id           String   @id @default(cuid())
+  label        String
+  expectedCost Decimal  @db.Decimal(10, 2)
+  actualCost   Decimal  @db.Decimal(10, 2)
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId      String
+  recordedBy   Member?  @relation(fields: [recordedById], references: [id])
+  recordedById String?
+  createdAt    DateTime @default(now())
 
   @@index([eventId])
 }

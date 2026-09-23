@@ -9,6 +9,8 @@ import {
   type Permission,
   type EventInput,
   type TaskInput,
+  type BudgetItem,
+  type BudgetItemInput,
 } from "./types";
 
 function dayOffset(days: number, hour = 17, minute = 0): string {
@@ -34,6 +36,10 @@ export function getCurrentUser(): Member {
 
 export function hasPermission(permission: Permission, member = getCurrentUser()): boolean {
   return ROLE_PERMISSIONS[member.accessRole].includes(permission);
+}
+
+export function canUpdateTask(task: Task, member = getCurrentUser()): boolean {
+  return hasPermission("manage_tasks", member) || task.assigneeIds.includes(member.id);
 }
 
 export function updateMemberAccessRole(memberId: string, accessRole: AccessRole): void {
@@ -229,8 +235,39 @@ export const tasks: Task[] = [
   },
 ];
 
+export const budgetItems: BudgetItem[] = [
+  {
+    id: "b1",
+    eventId: "e1",
+    label: "Venue hire",
+    expectedCost: 800,
+    actualCost: 750,
+    recordedById: "m4",
+    createdAt: dayOffset(-6),
+  },
+  {
+    id: "b2",
+    eventId: "e1",
+    label: "Catering",
+    expectedCost: 1200,
+    actualCost: 1340,
+    recordedById: "m4",
+    createdAt: dayOffset(-5),
+  },
+  {
+    id: "b3",
+    eventId: "e2",
+    label: "BBQ supplies",
+    expectedCost: 300,
+    actualCost: 280,
+    recordedById: "m5",
+    createdAt: dayOffset(-3),
+  },
+];
+
 let taskSeq = tasks.length;
 let eventSeq = events.length;
+let budgetSeq = budgetItems.length;
 
 const PRIORITY_RANK: Record<Priority, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 
@@ -291,6 +328,9 @@ export function deleteEvent(id: string): { event: CcaEvent; removedTaskIds: stri
       removedTaskIds.push(tasks[i].id);
       tasks.splice(i, 1);
     }
+  }
+  for (let i = budgetItems.length - 1; i >= 0; i -= 1) {
+    if (budgetItems[i].eventId === id) budgetItems.splice(i, 1);
   }
   return { event, removedTaskIds: removedTaskIds.reverse() };
 }
@@ -396,4 +436,58 @@ export function getDashboardStats(): DashboardStats {
     open, inProgress, overdue, dueThisWeek, done, total,
     completionRate: total ? Math.round((done / total) * 100) : 0,
   };
+}
+
+export function getBudgetItemsForEvent(eventId: string): BudgetItem[] {
+  return budgetItems.filter((b) => b.eventId === eventId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export function getBudgetItemById(id: string): BudgetItem | undefined {
+  return budgetItems.find((b) => b.id === id);
+}
+
+export function createBudgetItem(eventId: string, input: BudgetItemInput, recordedById: string | null): BudgetItem {
+  budgetSeq += 1;
+  const item: BudgetItem = {
+    id: `b${budgetSeq}`,
+    eventId,
+    label: input.label,
+    expectedCost: input.expectedCost,
+    actualCost: input.actualCost,
+    recordedById,
+    createdAt: new Date().toISOString(),
+  };
+  budgetItems.push(item);
+  return item;
+}
+
+export function updateBudgetItem(id: string, input: BudgetItemInput): BudgetItem | undefined {
+  const item = budgetItems.find((b) => b.id === id);
+  if (!item) return undefined;
+  Object.assign(item, input);
+  return item;
+}
+
+export function deleteBudgetItem(id: string): BudgetItem | undefined {
+  const index = budgetItems.findIndex((b) => b.id === id);
+  if (index === -1) return undefined;
+  const [item] = budgetItems.splice(index, 1);
+  return item;
+}
+
+export interface BudgetSummary {
+  expectedTotal: number;
+  actualTotal: number;
+  variance: number;
+}
+
+export function getEventBudgetSummary(eventId: string): BudgetSummary {
+  const items = getBudgetItemsForEvent(eventId);
+  const expectedTotal = items.reduce((sum, b) => sum + b.expectedCost, 0);
+  const actualTotal = items.reduce((sum, b) => sum + b.actualCost, 0);
+  return { expectedTotal, actualTotal, variance: actualTotal - expectedTotal };
+}
+
+export function canEditBudgetItem(item: BudgetItem, member = getCurrentUser()): boolean {
+  return hasPermission("manage_events", member) || item.recordedById === member.id;
 }

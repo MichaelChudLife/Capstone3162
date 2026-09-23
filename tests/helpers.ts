@@ -1,13 +1,15 @@
 import { vi } from "vitest";
-import type { AccessRole, EventInput, TaskInput } from "@/lib/types";
+import type { AccessRole, BudgetItemInput, EventInput, TaskInput } from "@/lib/types";
 
 export async function freshWorkspace() {
   vi.resetModules();
   const data = await import("@/lib/data");
   const events = await import("@/app/events/actions");
   const tasks = await import("@/app/tasks/actions");
+  const budget = await import("@/app/events/budget-actions");
+  const board = await import("@/app/actions");
   const actAs = (role: AccessRole) => data.updateMemberAccessRole(data.currentUserId, role);
-  return { data, events, tasks, actAs };
+  return { data, events, tasks, budget, board, actAs };
 }
 
 export function hoursFromNow(hours: number): string {
@@ -33,6 +35,15 @@ export function taskInput(overrides: Partial<TaskInput> = {}): TaskInput {
     dueDate: hoursFromNow(72),
     assigneeIds: ["m2"],
     eventId: null,
+    ...overrides,
+  };
+}
+
+export function budgetItemInput(overrides: Partial<BudgetItemInput> = {}): BudgetItemInput {
+  return {
+    label: "Photography",
+    expectedCost: 150,
+    actualCost: 0,
     ...overrides,
   };
 }

@@ -1,6 +1,7 @@
 import {
   PRIORITY_ORDER,
   STATUS_ORDER,
+  type BudgetItemInput,
   type EventInput,
   type FieldErrors,
   type TaskInput,
@@ -12,6 +13,7 @@ export const LIMITS = {
   eventLocation: 120,
   taskTitle: 120,
   taskDescription: 2000,
+  budgetLabel: 100,
 } as const;
 
 export type Validation<T, K extends string> =
@@ -110,5 +112,30 @@ export function validateTaskInput(
       assigneeIds,
       eventId,
     },
+  };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export function validateBudgetItemInput(raw: BudgetItemInput): Validation<BudgetItemInput, keyof BudgetItemInput> {
+  const errors: FieldErrors<keyof BudgetItemInput> = {};
+  const label = (raw.label ?? "").trim();
+
+  if (!label) errors.label = "Give the cost a label.";
+  else if (label.length > LIMITS.budgetLabel) errors.label = `Keep the label under ${LIMITS.budgetLabel} characters.`;
+
+  const expectedCost = Number(raw.expectedCost);
+  if (!Number.isFinite(expectedCost) || expectedCost < 0) errors.expectedCost = "Enter a valid expected cost.";
+
+  const actualCost = Number(raw.actualCost);
+  if (!Number.isFinite(actualCost) || actualCost < 0) errors.actualCost = "Enter a valid actual cost.";
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+  return {
+    ok: true,
+    value: { label, expectedCost: round2(expectedCost), actualCost: round2(actualCost) },
   };
 }
