@@ -52,10 +52,35 @@ export interface Task {
   status: TaskStatus;
   priority: Priority;
   dueDate: string | null;
-  assigneeId: string | null;
+  assigneeIds: string[];
   eventId: string | null;
   createdAt: string;
 }
+
+export interface EventInput {
+  title: string;
+  description: string;
+  date: string;
+  location: string;
+}
+
+export interface TaskInput {
+  title: string;
+  description: string;
+  status: TaskStatus;
+  priority: Priority;
+  dueDate: string | null;
+  assigneeIds: string[];
+  eventId: string | null;
+}
+
+export type FieldErrors<K extends string = string> = Partial<Record<K, string>>;
+
+export type ActionResult<T = null> =
+  | { ok: true; data: T }
+  | { ok: false; message: string; errors?: FieldErrors };
+
+export const PRIORITY_ORDER: Priority[] = ["HIGH", "MEDIUM", "LOW"];
 
 export const STATUS_LABEL: Record<TaskStatus, string> = {
   TODO: "Not started",

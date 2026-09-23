@@ -29,34 +29,36 @@ enum AccessRole {
 }
 
 model Member {
-  id       String @id @default(cuid())
-  name     String
-  initials String
-  color    String
-  role     String
+  id         String     @id @default(cuid())
+  name       String
+  initials   String
+  color      String
+  role       String
   accessRole AccessRole @default(COMMITTEE_MEMBER)
-  tasks    Task[]
+  tasks      Task[]     @relation("TaskAssignees")
 }
 
 model Event {
   id          String   @id @default(cuid())
   title       String
   date        DateTime
-  location    String
-  description String
+  location    String   @default("")
+  description String   @default("")
   tasks       Task[]
+  createdAt   DateTime @default(now())
 }
 
 model Task {
   id          String     @id @default(cuid())
   title       String
-  description String
+  description String     @default("")
   status      TaskStatus @default(TODO)
   priority    Priority   @default(MEDIUM)
   dueDate     DateTime?
-  assignee    Member?    @relation(fields: [assigneeId], references: [id])
-  assigneeId  String?
-  event       Event?     @relation(fields: [eventId], references: [id])
+  assignees   Member[]   @relation("TaskAssignees")
+  event       Event?     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   eventId     String?
   createdAt   DateTime   @default(now())
+
+  @@index([eventId])
 }

@@ -45,3 +45,31 @@ export function dueTone(iso: string | null): DueTone {
   if (d <= 3) return "soon";
   return "normal";
 }
+
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+export function toDateTimeLocal(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export function fromDateTimeLocal(value: string): string {
+  if (!value) return "";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toISOString();
+}
+
+export function formatDeadline(iso: string | null): string {
+  if (!iso) return "No deadline";
+  return new Date(iso).toLocaleString("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
