@@ -4,6 +4,8 @@ import {
   type Member,
   type CcaEvent,
   type Task,
+  type BudgetItem,
+  type BudgetItemInput,
   type TaskStatus,
   type Priority,
   type Permission,
@@ -11,6 +13,7 @@ import {
   type TaskInput,
 } from "./types";
 import { hashPassword } from "./password";
+import { summariseBudget, type BudgetSummary } from "./money";
 
 // Demo seed data only — every member shares this password so the app can be
 // tried out as any role. Not a pattern to carry into a real deployment.
@@ -254,8 +257,20 @@ export const tasks: Task[] = [
   },
 ];
 
+// Amounts are integer cents (AUD). Items with a null `actualCents` have no
+// spend recorded yet.
+export const budgetItems: BudgetItem[] = [
+  { id: "b1", eventId: "e1", description: "Venue hire — LTB Foyer", expectedCents: 120000, actualCents: 120000, createdAt: dayOffset(-12) },
+  { id: "b2", eventId: "e1", description: "Catering — canapés and drinks", expectedCents: 280000, actualCents: 312550, createdAt: dayOffset(-11) },
+  { id: "b3", eventId: "e1", description: "Printing — posters and name tags", expectedCents: 45000, actualCents: 38000, createdAt: dayOffset(-8) },
+  { id: "b4", eventId: "e1", description: "Photographer", expectedCents: 60000, actualCents: null, createdAt: dayOffset(-5) },
+  { id: "b5", eventId: "e2", description: "BBQ food and drinks", expectedCents: 90000, actualCents: 84520, createdAt: dayOffset(-7) },
+  { id: "b6", eventId: "e2", description: "Equipment hire", expectedCents: 25000, actualCents: null, createdAt: dayOffset(-6) },
+];
+
 let taskSeq = tasks.length;
 let eventSeq = events.length;
+let budgetSeq = budgetItems.length;
 
 const PRIORITY_RANK: Record<Priority, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 
@@ -310,6 +325,9 @@ export function deleteEvent(id: string): { event: CcaEvent; removedTaskIds: stri
   const index = events.findIndex((e) => e.id === id);
   if (index === -1) return undefined;
   const [event] = events.splice(index, 1);
+  for (let i = budgetItems.length - 1; i >= 0; i -= 1) {
+    if (budgetItems[i].eventId === id) budgetItems.splice(i, 1);
+  }
   const removedTaskIds: string[] = [];
   for (let i = tasks.length - 1; i >= 0; i -= 1) {
     if (tasks[i].eventId === id) {
@@ -318,6 +336,45 @@ export function deleteEvent(id: string): { event: CcaEvent; removedTaskIds: stri
     }
   }
   return { event, removedTaskIds: removedTaskIds.reverse() };
+}
+
+export function getBudgetItemsForEvent(eventId: string): BudgetItem[] {
+  return budgetItems.filter((b) => b.eventId === eventId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export function getBudgetItemById(id: string): BudgetItem | undefined {
+  return budgetItems.find((b) => b.id === id);
+}
+
+export function getBudgetSummary(eventId: string): BudgetSummary {
+  return summariseBudget(getBudgetItemsForEvent(eventId));
+}
+
+export function createBudgetItem(eventId: string, input: BudgetItemInput): BudgetItem {
+  budgetSeq += 1;
+  const item: BudgetItem = {
+    id: `b${budgetSeq}`,
+    eventId,
+    description: input.description,
+    expectedCents: input.expectedCents,
+    actualCents: input.actualCents,
+    createdAt: new Date().toISOString(),
+  };
+  budgetItems.push(item);
+  return item;
+}
+
+export function updateBudgetItem(id: string, input: BudgetItemInput): BudgetItem | undefined {
+  const item = budgetItems.find((b) => b.id === id);
+  if (!item) return undefined;
+  Object.assign(item, input);
+  return item;
+}
+
+export function deleteBudgetItem(id: string): BudgetItem | undefined {
+  const index = budgetItems.findIndex((b) => b.id === id);
+  if (index === -1) return undefined;
+  return budgetItems.splice(index, 1)[0];
 }
 
 export function getTasks(): Task[] {

@@ -12,6 +12,7 @@ export type Permission =
   | "manage_access"
   | "manage_tasks"
   | "manage_events"
+  | "manage_budget"
   | "view_workspace"
   | "update_own_tasks";
 
@@ -25,11 +26,11 @@ export const ACCESS_ROLES: AccessRole[] = [
 ];
 
 export const ROLE_PERMISSIONS: Record<AccessRole, Permission[]> = {
-  "IT Director": ["manage_access", "manage_tasks", "manage_events", "view_workspace"],
-  "Committee Director": ["manage_tasks", "manage_events", "view_workspace"],
-  "Events Director": ["manage_events", "view_workspace"],
+  "IT Director": ["manage_access", "manage_tasks", "manage_events", "manage_budget", "view_workspace"],
+  "Committee Director": ["manage_tasks", "manage_events", "manage_budget", "view_workspace"],
+  "Events Director": ["manage_events", "manage_budget", "view_workspace"],
   "Marketing Director": ["view_workspace"],
-  "Finance Director": ["view_workspace"],
+  "Finance Director": ["manage_budget", "view_workspace"],
   "Committee Member": ["view_workspace", "update_own_tasks"],
 };
 
@@ -64,6 +65,17 @@ export interface Task {
   createdAt: string;
 }
 
+// Money is stored as integer cents (AUD) so totals and variance never pick up
+// floating-point drift. `actualCents` is null until spend has been recorded.
+export interface BudgetItem {
+  id: string;
+  eventId: string;
+  description: string;
+  expectedCents: number;
+  actualCents: number | null;
+  createdAt: string;
+}
+
 export interface EventInput {
   title: string;
   description: string;
@@ -79,6 +91,12 @@ export interface TaskInput {
   dueDate: string | null;
   assigneeIds: string[];
   eventId: string | null;
+}
+
+export interface BudgetItemInput {
+  description: string;
+  expectedCents: number;
+  actualCents: number | null;
 }
 
 export type FieldErrors<K extends string = string> = Partial<Record<K, string>>;
