@@ -4,9 +4,19 @@ import AppShell from "@/components/AppShell";
 import PageHeader from "@/components/PageHeader";
 import EventActions from "@/components/EventActions";
 import NewTaskButton from "@/components/NewTaskButton";
+import BudgetSection from "@/components/BudgetSection";
 import { AvatarStack, DueText, PriorityInline, StatusPill, UnassignedFlag, assigneeNames } from "@/components/ui";
 import { CalendarIcon, MapPinIcon } from "@/components/icons";
-import { getEventById, getEvents, getMembers, getMembersByIds, getTasksForEvent, hasPermission } from "@/lib/data";
+import {
+  getBudgetItemsForEvent,
+  getBudgetSummary,
+  getEventById,
+  getEvents,
+  getMembers,
+  getMembersByIds,
+  getTasksForEvent,
+  hasPermission,
+} from "@/lib/data";
 import { requireCurrentMember } from "@/lib/auth";
 import { daysUntil } from "@/lib/format";
 import { STATUS_LABEL, STATUS_ORDER } from "@/lib/types";
@@ -33,6 +43,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const unassigned = subTasks.filter((t) => t.assigneeIds.length === 0 && t.status !== "DONE").length;
   const canManageEvents = hasPermission("manage_events", user);
   const canManageTasks = hasPermission("manage_tasks", user);
+  const canManageBudget = hasPermission("manage_budget", user);
+  const budgetItems = getBudgetItemsForEvent(event.id);
   const date = new Date(event.date);
 
   return (
@@ -47,7 +59,9 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         title={event.title}
         subtitle={countdown(event.date)}
         actions={
-          canManageEvents ? <EventActions event={event} subTaskTitles={subTasks.map((t) => t.title)} /> : undefined
+          canManageEvents ? (
+            <EventActions event={event} subTaskTitles={subTasks.map((t) => t.title)} budgetItemCount={budgetItems.length} />
+          ) : undefined
         }
       />
 
@@ -160,6 +174,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           })
         )}
       </section>
+
+      <BudgetSection event={event} items={budgetItems} summary={getBudgetSummary(event.id)} canManage={canManageBudget} />
     </AppShell>
   );
 }

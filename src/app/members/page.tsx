@@ -8,11 +8,11 @@ import RoleSelect from "@/components/RoleSelect";
 export const dynamic = "force-dynamic";
 
 const perms: { role: string; desc: string }[] = [
-  { role: "IT Director", desc: "Manage every member's access and all workspace content" },
-  { role: "Committee Director", desc: "Create and manage events and tasks" },
-  { role: "Events Director", desc: "Manage event planning and event-linked work" },
+  { role: "IT Director", desc: "Manage every member's access and all workspace content, including budgets" },
+  { role: "Committee Director", desc: "Create and manage events, tasks and event budgets" },
+  { role: "Events Director", desc: "Manage event planning, event-linked work and event budgets" },
   { role: "Marketing Director", desc: "View workspace information for marketing delivery" },
-  { role: "Finance Director", desc: "View workspace information for finance delivery" },
+  { role: "Finance Director", desc: "Record and manage event budgets; view workspace information" },
   { role: "Committee Member", desc: "View workspace information and assigned work" },
 ];
 

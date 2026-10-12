@@ -1,6 +1,8 @@
+import { MAX_AMOUNT_CENTS } from "./money";
 import {
   PRIORITY_ORDER,
   STATUS_ORDER,
+  type BudgetItemInput,
   type EventInput,
   type FieldErrors,
   type TaskInput,
@@ -12,6 +14,7 @@ export const LIMITS = {
   eventLocation: 120,
   taskTitle: 120,
   taskDescription: 2000,
+  budgetDescription: 120,
 } as const;
 
 export type Validation<T, K extends string> =
@@ -111,4 +114,31 @@ export function validateTaskInput(
       eventId,
     },
   };
+}
+
+function isAmount(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= MAX_AMOUNT_CENTS;
+}
+
+export function validateBudgetItemInput(
+  raw: BudgetItemInput,
+): Validation<BudgetItemInput, keyof BudgetItemInput> {
+  const errors: FieldErrors<keyof BudgetItemInput> = {};
+  const description = (raw.description ?? "").trim();
+
+  if (!description) errors.description = "Describe what the cost is for.";
+  else if (description.length > LIMITS.budgetDescription) {
+    errors.description = `Keep the description under ${LIMITS.budgetDescription} characters.`;
+  }
+
+  if (!isAmount(raw.expectedCents)) errors.expectedCents = "Enter the expected cost as an AUD amount, e.g. 250.00.";
+
+  const actualCents = raw.actualCents ?? null;
+  if (actualCents !== null && !isAmount(actualCents)) {
+    errors.actualCents = "Enter the actual spend as an AUD amount, e.g. 250.00.";
+  }
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+  return { ok: true, value: { description, expectedCents: raw.expectedCents, actualCents } };
 }

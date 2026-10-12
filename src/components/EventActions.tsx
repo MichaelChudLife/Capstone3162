@@ -8,7 +8,15 @@ import { FormAlert, dangerButtonClass, secondaryButtonClass } from "@/components
 import { deleteEventAction } from "@/app/events/actions";
 import type { CcaEvent } from "@/lib/types";
 
-export default function EventActions({ event, subTaskTitles }: { event: CcaEvent; subTaskTitles: string[] }) {
+export default function EventActions({
+  event,
+  subTaskTitles,
+  budgetItemCount = 0,
+}: {
+  event: CcaEvent;
+  subTaskTitles: string[];
+  budgetItemCount?: number;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -71,6 +79,11 @@ export default function EventActions({ event, subTaskTitles }: { event: CcaEvent
         }
       >
         <FormAlert message={error} />
+        {budgetItemCount > 0 && (
+          <p className="mb-3 text-sm text-[var(--muted)]">
+            Its {budgetItemCount} budget item{budgetItemCount === 1 ? "" : "s"} will be removed too.
+          </p>
+        )}
         {count > 0 && (
           <ul className="mb-3 max-h-48 space-y-1.5 overflow-y-auto rounded-xl bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--ink)]">
             {subTaskTitles.map((title, i) => (
