@@ -6,6 +6,7 @@ import { requireCurrentMember } from "@/lib/auth";
 import { StatusPill, PriorityInline, DueText } from "@/components/ui";
 import { daysUntil } from "@/lib/format";
 import { AlertIcon } from "@/components/icons";
+import { reminderKindFor } from "@/lib/reminder-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -32,11 +33,8 @@ export default async function DashboardPage() {
 
   const myTasksAll = tasks.filter((t) => t.assigneeIds.includes(user.id));
 
-  const within48 = myTasksAll.filter((t) => {
-    if (t.status === "DONE" || !t.dueDate) return false;
-    const hrs = (new Date(t.dueDate).getTime() - Date.now()) / 3600000;
-    return hrs >= 0 && hrs <= 48;
-  }).length;
+  const now = new Date();
+  const within48 = myTasksAll.filter((t) => reminderKindFor(t, now) === "due_soon").length;
 
   const myTasks = myTasksAll.slice().sort((a, b) => {
     if (a.status === "DONE" !== (b.status === "DONE")) return a.status === "DONE" ? 1 : -1;

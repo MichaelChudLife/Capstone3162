@@ -37,6 +37,7 @@ model Member {
   accessRole    AccessRole         @default(COMMITTEE_MEMBER)
   tasks         Task[]             @relation("TaskAssignees")
   statusChanges TaskStatusChange[]
+  reminders     TaskReminder[]
 }
 
 model Event {
@@ -75,6 +76,7 @@ model Task {
   eventId       String?
   createdAt     DateTime           @default(now())
   statusChanges TaskStatusChange[]
+  reminders     TaskReminder[]
 
   @@index([eventId])
 }
@@ -90,4 +92,24 @@ model TaskStatusChange {
   at         DateTime   @default(now())
 
   @@index([taskId, at])
+}
+
+enum ReminderKind {
+  DUE_SOON
+  OVERDUE
+}
+
+model TaskReminder {
+  id       String       @id @default(cuid())
+  task     Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId   String
+  member   Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  memberId String
+  kind     ReminderKind
+  dueDate  DateTime
+  firedAt  DateTime     @default(now())
+  readAt   DateTime?
+
+  @@unique([taskId, memberId, kind, dueDate])
+  @@index([memberId, readAt])
 }
