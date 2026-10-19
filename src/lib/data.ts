@@ -18,7 +18,7 @@ import {
   type InviteInput,
 } from "./types";
 import { DUE_SOON_HOURS, reminderKindFor } from "./reminder-rules";
-import { hashPassword } from "./password";
+import { hashPassword, verifyPassword } from "./password";
 import { summariseBudget, type BudgetSummary } from "./money";
 
 // Demo seed data only — every member shares this password so the app can be
@@ -39,12 +39,14 @@ function dayOffset(days: number, hour = 17, minute = 0): string {
 }
 
 export const members: Member[] = [
-  { id: "m1", name: "Michael Zhang", initials: "MZ", color: "#4f46e5", role: "Tech Lead", accessRole: "IT Director", email: "michael@cca.org.au", passwordHash: hashPassword(DEMO_PASSWORD) },
-  { id: "m2", name: "Yahya Al-Rawi", initials: "YA", color: "#0ea5e9", role: "Backend", accessRole: "Events Director", email: "yahya@cca.org.au", passwordHash: hashPassword(DEMO_PASSWORD) },
-  { id: "m3", name: "Nathanael Khor", initials: "NK", color: "#16a34a", role: "Frontend", accessRole: "Marketing Director", email: "nathanael@cca.org.au", passwordHash: hashPassword(DEMO_PASSWORD) },
-  { id: "m4", name: "YunSoo Jin", initials: "YJ", color: "#db2777", role: "Full-stack", accessRole: "Committee Director", email: "yunsoo@cca.org.au", passwordHash: hashPassword(DEMO_PASSWORD) },
-  { id: "m5", name: "Sener Sethi", initials: "SS", color: "#f59e0b", role: "QA & Docs", accessRole: "Committee Member", email: "sener@cca.org.au", passwordHash: hashPassword(DEMO_PASSWORD) },
+  { id: "m1", name: "Michael Zhang", initials: "MZ", color: "#4f46e5", role: "Tech Lead", accessRole: "IT Director", email: "michael@cca.org.au" },
+  { id: "m2", name: "Yahya Al-Rawi", initials: "YA", color: "#0ea5e9", role: "Backend", accessRole: "Events Director", email: "yahya@cca.org.au" },
+  { id: "m3", name: "Nathanael Khor", initials: "NK", color: "#16a34a", role: "Frontend", accessRole: "Marketing Director", email: "nathanael@cca.org.au" },
+  { id: "m4", name: "YunSoo Jin", initials: "YJ", color: "#db2777", role: "Full-stack", accessRole: "Committee Director", email: "yunsoo@cca.org.au" },
+  { id: "m5", name: "Sener Sethi", initials: "SS", color: "#f59e0b", role: "QA & Docs", accessRole: "Committee Member", email: "sener@cca.org.au" },
 ];
+
+const passwordHashes = new Map<string, string>(members.map((member) => [member.id, hashPassword(DEMO_PASSWORD)]));
 
 // The identity of the signed-in member for the current request. Real
 // requests set this from the session cookie (see lib/auth.ts); it defaults
@@ -63,6 +65,12 @@ export function getCurrentUser(): Member {
 export function getMemberByEmail(email: string): Member | undefined {
   const target = email.trim().toLowerCase();
   return members.find((member) => member.email.toLowerCase() === target);
+}
+
+export function authenticate(email: string, password: string): Member | undefined {
+  const member = getMemberByEmail(email);
+  const hash = member && passwordHashes.get(member.id);
+  return hash && verifyPassword(password, hash) ? member : undefined;
 }
 
 export function hasPermission(permission: Permission, member = getCurrentUser()): boolean {
@@ -699,9 +707,9 @@ export function acceptInvite(
     role: invite.position || "Committee member",
     accessRole: invite.accessRole,
     email: invite.email,
-    passwordHash: profile.passwordHash,
   };
   members.push(member);
+  passwordHashes.set(member.id, profile.passwordHash);
   invite.acceptedAt = now.toISOString();
   invite.acceptedMemberId = member.id;
   bumpWorkspaceVersion();

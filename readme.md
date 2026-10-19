@@ -153,7 +153,7 @@ npm i prisma @prisma/client
 npx prisma migrate dev
 ```
 
-Then swap the `src/lib/data.ts` accessor functions (`getTasks`, `createTask`, `updateTask`, `createEvent`, `deleteEvent`, `setTaskStatus`, `getBudgetItemsForEvent`, `createBudgetItem`, …) for Prisma client calls — the function signatures and types (`src/lib/types.ts`) already match the schema. Task assignees are a many-to-many relation (`Task.assignees` ↔ `Member.tasks`), and deleting an event cascades to its sub-tasks and budget items (`onDelete: Cascade`). Add `email` and `passwordHash` columns to `Member` in the schema to match `src/lib/types.ts`.
+Then swap the `src/lib/data.ts` accessor functions (`getTasks`, `createTask`, `updateTask`, `createEvent`, `deleteEvent`, `setTaskStatus`, `getBudgetItemsForEvent`, `createBudgetItem`, …) for Prisma client calls — the function signatures and types (`src/lib/types.ts`) already match the schema. Task assignees are a many-to-many relation (`Task.assignees` ↔ `Member.tasks`), and deleting an event cascades to its sub-tasks and budget items (`onDelete: Cascade`). `Member.passwordHash` exists only in the database: `src/lib/types.ts` leaves it off `Member` so a hash can never be passed to a client component, so query members with `omit: { passwordHash: true }` and check passwords in one server-side function like `authenticate()`.
 
 **Known simplification:** "who's logged in" for a given request is tracked with a single
 module-level `currentUserId` variable (`src/lib/data.ts`), refreshed from the session cookie
