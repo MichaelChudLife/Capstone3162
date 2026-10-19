@@ -14,6 +14,8 @@ import {
   type StatusChange,
   type TaskReminder,
   type ReminderKind,
+  type Invite,
+  type InviteInput,
 } from "./types";
 import { DUE_SOON_HOURS, reminderKindFor } from "./reminder-rules";
 import { hashPassword } from "./password";
@@ -298,6 +300,8 @@ export const statusChanges: StatusChange[] = [
 
 export const taskReminders: TaskReminder[] = [];
 
+export const invites: Invite[] = [];
+
 // Amounts are integer cents (AUD). Items with a null `actualCents` have no
 // spend recorded yet.
 export const budgetItems: BudgetItem[] = [
@@ -312,6 +316,8 @@ export const budgetItems: BudgetItem[] = [
 let taskSeq = tasks.length;
 let statusSeq = statusChanges.length;
 let reminderSeq = 0;
+let inviteSeq = 0;
+let memberSeq = members.length;
 const live = ((globalThis as { __ccaHubLive?: { version: number } }).__ccaHubLive ??= { version: 1 });
 
 export function getWorkspaceVersion(): number {
@@ -603,6 +609,103 @@ export function markAllRemindersRead(memberId: string, now = new Date()): number
     count += 1;
   }
   return count;
+}
+
+export const INVITE_TTL_DAYS = 7;
+
+export type InviteState = "pending" | "expired" | "accepted" | "revoked";
+
+export function inviteState(invite: Invite, now = new Date()): InviteState {
+  if (invite.acceptedAt) return "accepted";
+  if (invite.revokedAt) return "revoked";
+  if (new Date(invite.expiresAt).getTime() <= now.getTime()) return "expired";
+  return "pending";
+}
+
+function inviteExpiry(now: Date): string {
+  return new Date(now.getTime() + INVITE_TTL_DAYS * 86400000).toISOString();
+}
+
+export function getOpenInvites(): Invite[] {
+  return invites
+    .filter((i) => !i.acceptedAt && !i.revokedAt)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function getInviteById(id: string): Invite | undefined {
+  return invites.find((i) => i.id === id);
+}
+
+export function findInviteByTokenHash(tokenHash: string): Invite | undefined {
+  return invites.find((i) => i.tokenHash === tokenHash);
+}
+
+export function createInvite(input: InviteInput, tokenHash: string, invitedById: string, now = new Date()): Invite {
+  inviteSeq += 1;
+  const invite: Invite = {
+    id: `i${inviteSeq}`,
+    email: input.email,
+    accessRole: input.accessRole,
+    position: input.position,
+    tokenHash,
+    invitedById,
+    createdAt: now.toISOString(),
+    expiresAt: inviteExpiry(now),
+    acceptedAt: null,
+    acceptedMemberId: null,
+    revokedAt: null,
+  };
+  invites.push(invite);
+  return invite;
+}
+
+export function renewInvite(id: string, tokenHash: string, now = new Date()): Invite | undefined {
+  const invite = invites.find((i) => i.id === id);
+  if (!invite || invite.acceptedAt || invite.revokedAt) return undefined;
+  invite.tokenHash = tokenHash;
+  invite.expiresAt = inviteExpiry(now);
+  return invite;
+}
+
+export function revokeInvite(id: string, now = new Date()): Invite | undefined {
+  const invite = invites.find((i) => i.id === id);
+  if (!invite || invite.acceptedAt || invite.revokedAt) return undefined;
+  invite.revokedAt = now.toISOString();
+  return invite;
+}
+
+const NEW_MEMBER_COLORS = ["#0891b2", "#7c3aed", "#ea580c", "#65a30d", "#be123c", "#0d9488"];
+
+function initialsFor(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+}
+
+export function acceptInvite(
+  inviteId: string,
+  profile: { name: string; passwordHash: string },
+  now = new Date(),
+): Member | undefined {
+  const invite = invites.find((i) => i.id === inviteId);
+  if (!invite || inviteState(invite, now) !== "pending" || getMemberByEmail(invite.email)) return undefined;
+  memberSeq += 1;
+  const member: Member = {
+    id: `m${memberSeq}`,
+    name: profile.name,
+    initials: initialsFor(profile.name),
+    color: NEW_MEMBER_COLORS[(memberSeq - 1) % NEW_MEMBER_COLORS.length],
+    role: invite.position || "Committee member",
+    accessRole: invite.accessRole,
+    email: invite.email,
+    passwordHash: profile.passwordHash,
+  };
+  members.push(member);
+  invite.acceptedAt = now.toISOString();
+  invite.acceptedMemberId = member.id;
+  bumpWorkspaceVersion();
+  return member;
 }
 
 export interface DashboardStats {

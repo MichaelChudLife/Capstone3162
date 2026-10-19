@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionMemberId } from "@/lib/auth";
+import { getMemberById } from "@/lib/data";
 import LoginForm from "@/components/LoginForm";
 
 function Flame() {
@@ -19,7 +20,7 @@ function Check() {
 
 export default async function LoginPage() {
   const memberId = await getSessionMemberId();
-  if (memberId) redirect("/");
+  if (memberId && getMemberById(memberId)) redirect("/");
 
   const features = [
     "Events and tasks in one shared workspace",
