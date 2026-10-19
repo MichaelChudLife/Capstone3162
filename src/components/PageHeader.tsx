@@ -1,4 +1,4 @@
-import { getReminders, getMembers, getEvents, hasPermission } from "@/lib/data";
+import { getReminders, getMembers, getEvents, hasPermission, getCurrentUser } from "@/lib/data";
 import { dueLabel } from "@/lib/format";
 import NotificationsBell, { type BellItem } from "@/components/NotificationsBell";
 import NewTaskButton from "@/components/NewTaskButton";
@@ -12,7 +12,8 @@ export default function PageHeader({
   subtitle?: string;
   actions?: React.ReactNode;
 }) {
-  const items: BellItem[] = getReminders().map((r) => ({
+  const user = getCurrentUser();
+  const items: BellItem[] = getReminders(user).map((r) => ({
     id: r.task.id,
     title: r.task.title,
     label: dueLabel(r.task.dueDate),
@@ -31,9 +32,11 @@ export default function PageHeader({
         <NotificationsBell items={items} />
         <span
           className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
-          style={{ background: "var(--brand)" }}
+          style={{ background: user.color }}
+          title={user.name}
+          aria-label={`Logged in as ${user.name}`}
         >
-          MZ
+          {user.initials}
         </span>
       </div>
     </header>

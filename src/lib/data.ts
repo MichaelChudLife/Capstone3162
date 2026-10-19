@@ -430,11 +430,14 @@ export interface Reminder {
   daysUntil: number;
 }
 
-export function getReminders(): Reminder[] {
+export function getReminders(member = getCurrentUser()): Reminder[] {
+  const scoped = hasPermission("manage_tasks", member)
+    ? tasks
+    : tasks.filter((t) => t.assigneeIds.includes(member.id));
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const items: Reminder[] = [];
-  for (const task of tasks) {
+  for (const task of scoped) {
     if (task.status === "DONE" || !task.dueDate) continue;
     const due = new Date(task.dueDate);
     const startOfDue = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
