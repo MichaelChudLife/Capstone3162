@@ -3,6 +3,7 @@ import { requireCurrentMember } from "@/lib/auth";
 import { reminderLabel } from "@/lib/reminder-rules";
 import NotificationsBell, { type BellItem } from "@/components/NotificationsBell";
 import NewTaskButton from "@/components/NewTaskButton";
+import UserMenu from "@/components/UserMenu";
 
 export default async function PageHeader({
   title,
@@ -34,14 +35,16 @@ export default async function PageHeader({
         {actions}
         {hasPermission("manage_tasks", user) && <NewTaskButton members={getMembers()} events={getEvents()} />}
         <NotificationsBell items={items} />
-        <span
-          className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
-          style={{ background: user.color }}
-          title={`${user.name} · ${user.accessRole}`}
-          aria-label={`Logged in as ${user.name}`}
-        >
-          {user.initials}
-        </span>
+        <UserMenu
+          user={{
+            name: user.name,
+            initials: user.initials,
+            color: user.color,
+            email: user.email,
+            role: user.role,
+            accessRole: user.accessRole,
+          }}
+        />
       </div>
     </header>
   );

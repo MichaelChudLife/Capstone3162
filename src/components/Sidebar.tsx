@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { DashboardIcon, BoardIcon, CalendarIcon, BellIcon, UsersIcon } from "@/components/icons";
 import LogoutButton from "@/components/LogoutButton";
+import UserMenu from "@/components/UserMenu";
 import type { Member } from "@/lib/types";
 
 const nav = [
@@ -48,14 +49,7 @@ export default function Sidebar({ user }: { user: Member }) {
         })}
       </nav>
 
-      <div
-        title={`${user.name} · ${user.accessRole}`}
-        aria-label={`Logged in as ${user.name}`}
-        className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
-        style={{ background: user.color }}
-      >
-        {user.initials}
-      </div>
+      <UserMenu user={user} placement="sidebar" />
       <LogoutButton />
     </aside>
   );
