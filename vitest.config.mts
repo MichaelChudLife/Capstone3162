@@ -5,9 +5,20 @@ export default defineConfig({
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
+  esbuild: {
+    jsx: "automatic",
+  },
   test: {
-    environment: "node",
-    include: ["tests/**/*.test.ts"],
     setupFiles: ["tests/setup.ts"],
+    projects: [
+      {
+        extends: true,
+        test: { name: "unit", environment: "node", include: ["tests/**/*.test.ts"] },
+      },
+      {
+        extends: true,
+        test: { name: "components", environment: "jsdom", include: ["tests/**/*.test.tsx"] },
+      },
+    ],
   },
 });
