@@ -58,7 +58,10 @@ describe("TC-005 · F_REQ-5 Committee Member can only update self-assigned tasks
     expect(task.assigneeIds).not.toContain(ws.data.currentUserId);
     expect(ws.data.canUpdateTask(task)).toBe(false);
 
-    await expect(ws.app.moveTaskAction("t3", "DONE")).rejects.toThrow();
+    await expect(ws.app.moveTaskAction("t3", "DONE")).resolves.toEqual({
+      ok: false,
+      message: "You do not have access to update this task.",
+    });
     expect(ws.data.getTaskById("t3")?.status).not.toBe("DONE");
   });
 

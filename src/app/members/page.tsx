@@ -1,9 +1,12 @@
 import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
-import { getMembers } from "@/lib/data";
+import { getMemberById, getMembers, getOpenInvites, hasPermission, inviteState } from "@/lib/data";
 import { requireCurrentMember } from "@/lib/auth";
 import { Avatar } from "@/components/ui";
 import RoleSelect from "@/components/RoleSelect";
+import InviteMemberButton from "@/components/InviteMemberButton";
+import InviteRowActions from "@/components/InviteRowActions";
+import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +23,16 @@ export default async function MembersPage() {
   const user = await requireCurrentMember();
   const members = getMembers();
   const canManageAccess = user.accessRole === "IT Director";
+  const canInvite = hasPermission("manage_access", user);
+  const openInvites = canInvite ? getOpenInvites() : [];
 
   return (
     <AppShell user={user}>
-      <PageHeader title="Members" subtitle="Assign access by responsibility. Only the IT Director can change a role." />
+      <PageHeader
+        title="Members"
+        subtitle="Assign access by responsibility. Only the IT Director can change a role or invite new members."
+        actions={canInvite ? <InviteMemberButton /> : undefined}
+      />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {perms.map((p) => (
@@ -53,6 +62,46 @@ export default async function MembersPage() {
           ))}
         </ul>
       </section>
+
+      {canInvite && (
+        <section className="card mt-6 p-2">
+          <header className="flex items-center justify-between px-4 py-3">
+            <h2 className="text-base font-semibold text-[var(--ink)]">Pending invites</h2>
+            <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-xs font-medium text-[var(--muted)]">{openInvites.length}</span>
+          </header>
+          {openInvites.length === 0 ? (
+            <p className="border-t border-[var(--border)] px-4 py-6 text-sm text-[var(--muted)]">
+              No open invites. Use Invite member to create a one-time sign-up link.
+            </p>
+          ) : (
+            <ul>
+              {openInvites.map((invite) => {
+                const expired = inviteState(invite) === "expired";
+                const inviter = getMemberById(invite.invitedById);
+                return (
+                  <li key={invite.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--border)] px-4 py-3.5">
+                    <div className="min-w-0 flex-1 basis-56">
+                      <div className="truncate text-sm font-medium text-[var(--ink)]">{invite.email}</div>
+                      <div className="mt-0.5 text-xs text-[var(--muted)]">
+                        {invite.accessRole}
+                        {invite.position ? ` · ${invite.position}` : ""} · invited by {inviter?.name ?? "a former member"}
+                      </div>
+                    </div>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                        expired ? "bg-[var(--danger-soft)] text-[var(--danger)]" : "bg-[var(--warn-soft)] text-[var(--warn)]"
+                      }`}
+                    >
+                      {expired ? "Expired" : `Expires ${formatDate(invite.expiresAt)}`}
+                    </span>
+                    <InviteRowActions inviteId={invite.id} email={invite.email} />
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
     </AppShell>
   );
 }

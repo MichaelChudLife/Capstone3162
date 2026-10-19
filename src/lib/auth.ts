@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getCurrentUser, setCurrentUserId } from "./data";
+import { getCurrentUser, getMemberById, setCurrentUserId } from "./data";
 import type { Member } from "./types";
 
 export const SESSION_COOKIE = "cca_session";
@@ -73,10 +73,25 @@ export async function syncCurrentUserFromSession(): Promise<void> {
   }
 }
 
+export async function currentActor(): Promise<Member> {
+  let memberId: string | null = null;
+  try {
+    memberId = await getSessionMemberId();
+  } catch {
+    memberId = null;
+  }
+  const member = memberId ? getMemberById(memberId) : undefined;
+  if (!member) return getCurrentUser();
+  setCurrentUserId(member.id);
+  return member;
+}
+
 /** For Server Components: resolves the logged-in member or redirects to /login. */
 export async function requireCurrentMember(): Promise<Member> {
   const memberId = await getSessionMemberId();
   if (!memberId) redirect("/login");
-  setCurrentUserId(memberId);
-  return getCurrentUser();
+  const member = getMemberById(memberId);
+  if (!member) redirect("/login?signedout=1");
+  setCurrentUserId(member.id);
+  return member;
 }

@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import PageHeader from "@/components/PageHeader";
 import EditTaskButton from "@/components/EditTaskButton";
-import MoveMenu from "@/components/MoveMenu";
+import StatusControl from "@/components/StatusControl";
+import StatusHistory from "@/components/StatusHistory";
 import { Avatar, DueBadge, PriorityTag, StatusPill, UnassignedFlag } from "@/components/ui";
 import { CalendarIcon } from "@/components/icons";
 import { getEventById, getEvents, getMembers, getMembersByIds, getTaskById, hasPermission, canUpdateTask } from "@/lib/data";
@@ -55,8 +56,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
       />
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        <StatusPill status={task.status} />
-        {canUpdate && <MoveMenu taskId={task.id} status={task.status} />}
+        {canUpdate ? <StatusControl taskId={task.id} status={task.status} /> : <StatusPill status={task.status} />}
         <PriorityTag priority={task.priority} />
         {task.dueDate && task.status !== "DONE" && <DueBadge dueDate={task.dueDate} />}
         {assignees.length === 0 && <UnassignedFlag />}
@@ -109,6 +109,8 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
           <Detail label="Created">{formatDateTime(task.createdAt)}</Detail>
         </dl>
       </section>
+
+      <StatusHistory taskId={task.id} />
     </AppShell>
   );
 }

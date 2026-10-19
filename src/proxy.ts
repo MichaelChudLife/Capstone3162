@@ -7,8 +7,22 @@ export function proxy(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const memberId = token ? verifySessionToken(token) : null;
 
-  if (request.nextUrl.pathname === "/login") {
+  const { pathname, searchParams } = request.nextUrl;
+
+  if (pathname === "/login") {
+    if (searchParams.has("signedout")) {
+      const response = NextResponse.next();
+      response.cookies.delete(SESSION_COOKIE);
+      return response;
+    }
     if (memberId) return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/invite/")) return NextResponse.next();
+
+  if (pathname === "/api/live") {
+    if (!memberId) return NextResponse.json({ signedIn: false }, { status: 401 });
     return NextResponse.next();
   }
 

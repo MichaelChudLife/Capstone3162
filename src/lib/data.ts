@@ -11,13 +11,25 @@ import {
   type Permission,
   type EventInput,
   type TaskInput,
+  type StatusChange,
+  type TaskReminder,
+  type ReminderKind,
+  type Invite,
+  type InviteInput,
 } from "./types";
+import { DUE_SOON_HOURS, reminderKindFor } from "./reminder-rules";
 import { hashPassword } from "./password";
 import { summariseBudget, type BudgetSummary } from "./money";
 
 // Demo seed data only — every member shares this password so the app can be
 // tried out as any role. Not a pattern to carry into a real deployment.
 const DEMO_PASSWORD = "Committee2026!";
+
+function hoursOffset(hours: number): string {
+  const d = new Date(Date.now() + hours * 3600000);
+  d.setSeconds(0, 0);
+  return d.toISOString();
+}
 
 function dayOffset(days: number, hour = 17, minute = 0): string {
   const d = new Date();
@@ -254,7 +266,41 @@ export const tasks: Task[] = [
     eventId: "e1",
     createdAt: dayOffset(-1),
   },
+  {
+    id: "t15",
+    title: "Submit BBQ food safety checklist",
+    description: "Complete the campus food safety form and upload it to the events portal.",
+    status: "IN_PROGRESS",
+    priority: "HIGH",
+    dueDate: hoursOffset(20),
+    assigneeIds: ["m5"],
+    eventId: "e2",
+    createdAt: dayOffset(-3),
+  },
+  {
+    id: "t16",
+    title: "Send volunteer roster",
+    description: "Share the BBQ volunteer shifts with the committee group chat.",
+    status: "TODO",
+    priority: "MEDIUM",
+    dueDate: hoursOffset(-3),
+    assigneeIds: ["m5", "m4"],
+    eventId: "e2",
+    createdAt: dayOffset(-4),
+  },
 ];
+
+export const statusChanges: StatusChange[] = [
+  { id: "s1", taskId: "t1", from: "TODO", to: "IN_PROGRESS", actorId: "m4", at: dayOffset(-2, 10, 15) },
+  { id: "s2", taskId: "t2", from: "TODO", to: "IN_PROGRESS", actorId: "m3", at: dayOffset(-2, 14, 40) },
+  { id: "s3", taskId: "t8", from: "TODO", to: "IN_PROGRESS", actorId: "m3", at: dayOffset(-6, 9, 5) },
+  { id: "s4", taskId: "t8", from: "IN_PROGRESS", to: "DONE", actorId: "m3", at: dayOffset(-5, 16, 30) },
+  { id: "s5", taskId: "t15", from: "TODO", to: "IN_PROGRESS", actorId: "m5", at: dayOffset(-1, 11, 20) },
+];
+
+export const taskReminders: TaskReminder[] = [];
+
+export const invites: Invite[] = [];
 
 // Amounts are integer cents (AUD). Items with a null `actualCents` have no
 // spend recorded yet.
@@ -268,6 +314,20 @@ export const budgetItems: BudgetItem[] = [
 ];
 
 let taskSeq = tasks.length;
+let statusSeq = statusChanges.length;
+let reminderSeq = 0;
+let inviteSeq = 0;
+let memberSeq = members.length;
+const live = ((globalThis as { __ccaHubLive?: { version: number } }).__ccaHubLive ??= { version: 1 });
+
+export function getWorkspaceVersion(): number {
+  return live.version;
+}
+
+export function bumpWorkspaceVersion(): number {
+  live.version += 1;
+  return live.version;
+}
 let eventSeq = events.length;
 let budgetSeq = budgetItems.length;
 
@@ -334,6 +394,8 @@ export function deleteEvent(id: string): { event: CcaEvent; removedTaskIds: stri
       tasks.splice(i, 1);
     }
   }
+  removeWhere(statusChanges, (c) => removedTaskIds.includes(c.taskId));
+  removeWhere(taskReminders, (r) => removedTaskIds.includes(r.taskId));
   return { event, removedTaskIds: removedTaskIds.reverse() };
 }
 
@@ -376,6 +438,12 @@ export function deleteBudgetItem(id: string): BudgetItem | undefined {
   return budgetItems.splice(index, 1)[0];
 }
 
+function removeWhere<T>(list: T[], predicate: (item: T) => boolean): void {
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    if (predicate(list[i])) list.splice(i, 1);
+  }
+}
+
 export function getTasks(): Task[] {
   return tasks;
 }
@@ -411,42 +479,233 @@ export function createTask(input: TaskInput): Task {
   return task;
 }
 
-export function updateTask(id: string, input: TaskInput): Task | undefined {
+export function updateTask(id: string, input: TaskInput, actorId = currentUserId): Task | undefined {
   const task = tasks.find((t) => t.id === id);
   if (!task) return undefined;
+  const previous = task.status;
   Object.assign(task, { ...input, assigneeIds: [...input.assigneeIds] });
+  if (previous !== task.status) recordStatusChange(task.id, previous, task.status, actorId);
   return task;
 }
 
-export function setTaskStatus(id: string, status: TaskStatus): void {
+function recordStatusChange(taskId: string, from: TaskStatus, to: TaskStatus, actorId: string): StatusChange {
+  statusSeq += 1;
+  const change: StatusChange = { id: `s${statusSeq}`, taskId, from, to, actorId, at: new Date().toISOString() };
+  statusChanges.push(change);
+  return change;
+}
+
+export function setTaskStatus(id: string, status: TaskStatus, actorId = currentUserId): StatusChange | null {
   const task = tasks.find((t) => t.id === id);
-  if (task) task.status = status;
+  if (!task || task.status === status) return null;
+  const from = task.status;
+  task.status = status;
+  return recordStatusChange(id, from, status, actorId);
+}
+
+export function getStatusHistory(taskId: string): StatusChange[] {
+  return statusChanges
+    .filter((c) => c.taskId === taskId)
+    .map((c, index) => ({ c, index }))
+    .sort((a, b) => b.c.at.localeCompare(a.c.at) || b.index - a.index)
+    .map(({ c }) => c);
 }
 
 export interface Reminder {
   task: Task;
-  urgency: "overdue" | "today" | "soon";
-  daysUntil: number;
+  kind: ReminderKind;
 }
 
-export function getReminders(member = getCurrentUser()): Reminder[] {
+const KIND_RANK: Record<ReminderKind, number> = { overdue: 0, due_soon: 1 };
+
+export function getReminders(member = getCurrentUser(), now = new Date()): Reminder[] {
   const scoped = hasPermission("manage_tasks", member)
     ? tasks
     : tasks.filter((t) => t.assigneeIds.includes(member.id));
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const items: Reminder[] = [];
   for (const task of scoped) {
-    if (task.status === "DONE" || !task.dueDate) continue;
-    const due = new Date(task.dueDate);
-    const startOfDue = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
-    const daysUntil = Math.round((startOfDue - startOfToday) / 86400000);
-    if (daysUntil < 0) items.push({ task, urgency: "overdue", daysUntil });
-    else if (daysUntil === 0) items.push({ task, urgency: "today", daysUntil });
-    else if (daysUntil <= 3) items.push({ task, urgency: "soon", daysUntil });
+    const kind = reminderKindFor(task, now);
+    if (kind) items.push({ task, kind });
   }
-  const rank = { overdue: 0, today: 1, soon: 2 };
-  return items.sort((a, b) => rank[a.urgency] - rank[b.urgency] || a.daysUntil - b.daysUntil);
+  return items.sort((a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind] || (a.task.dueDate ?? "").localeCompare(b.task.dueDate ?? ""));
+}
+
+export function syncReminders(now = new Date()): number {
+  let fired = 0;
+  for (const task of tasks) {
+    const kind = reminderKindFor(task, now);
+    if (!kind || !task.dueDate) continue;
+    for (const memberId of task.assigneeIds) {
+      const exists = taskReminders.some(
+        (r) => r.taskId === task.id && r.memberId === memberId && r.kind === kind && r.dueDate === task.dueDate,
+      );
+      if (exists) continue;
+      reminderSeq += 1;
+      taskReminders.push({
+        id: `r${reminderSeq}`,
+        taskId: task.id,
+        memberId,
+        kind,
+        dueDate: task.dueDate,
+        firedAt: now.toISOString(),
+        readAt: null,
+      });
+      fired += 1;
+    }
+  }
+  if (fired > 0) bumpWorkspaceVersion();
+  return fired;
+}
+
+export function getNextReminderAt(now = new Date()): string | null {
+  let next: number | null = null;
+  for (const task of tasks) {
+    if (task.status === "DONE" || !task.dueDate || task.assigneeIds.length === 0) continue;
+    const due = new Date(task.dueDate).getTime();
+    for (const fireAt of [due - DUE_SOON_HOURS * 3600000, due]) {
+      if (fireAt > now.getTime() && (next === null || fireAt < next)) next = fireAt;
+    }
+  }
+  return next === null ? null : new Date(next).toISOString();
+}
+
+export interface MemberReminder {
+  reminder: TaskReminder;
+  task: Task;
+}
+
+export function getRemindersForMember(memberId: string, now = new Date()): MemberReminder[] {
+  syncReminders(now);
+  const active: MemberReminder[] = [];
+  for (const reminder of taskReminders) {
+    if (reminder.memberId !== memberId) continue;
+    const task = tasks.find((t) => t.id === reminder.taskId);
+    if (!task || task.status === "DONE" || task.dueDate !== reminder.dueDate || !task.assigneeIds.includes(memberId)) continue;
+    active.push({ reminder, task });
+  }
+  const overdue = new Set(active.filter((a) => a.reminder.kind === "overdue").map((a) => a.task.id));
+  return active
+    .filter((a) => !(a.reminder.kind === "due_soon" && overdue.has(a.task.id)))
+    .sort(
+      (a, b) =>
+        Number(a.reminder.readAt !== null) - Number(b.reminder.readAt !== null) ||
+        KIND_RANK[a.reminder.kind] - KIND_RANK[b.reminder.kind] ||
+        a.reminder.dueDate.localeCompare(b.reminder.dueDate),
+    );
+}
+
+export function markReminderRead(id: string, memberId: string, now = new Date()): boolean {
+  const reminder = taskReminders.find((r) => r.id === id && r.memberId === memberId);
+  if (!reminder) return false;
+  reminder.readAt ??= now.toISOString();
+  return true;
+}
+
+export function markAllRemindersRead(memberId: string, now = new Date()): number {
+  let count = 0;
+  for (const { reminder } of getRemindersForMember(memberId, now)) {
+    if (reminder.readAt) continue;
+    reminder.readAt = now.toISOString();
+    count += 1;
+  }
+  return count;
+}
+
+export const INVITE_TTL_DAYS = 7;
+
+export type InviteState = "pending" | "expired" | "accepted" | "revoked";
+
+export function inviteState(invite: Invite, now = new Date()): InviteState {
+  if (invite.acceptedAt) return "accepted";
+  if (invite.revokedAt) return "revoked";
+  if (new Date(invite.expiresAt).getTime() <= now.getTime()) return "expired";
+  return "pending";
+}
+
+function inviteExpiry(now: Date): string {
+  return new Date(now.getTime() + INVITE_TTL_DAYS * 86400000).toISOString();
+}
+
+export function getOpenInvites(): Invite[] {
+  return invites
+    .filter((i) => !i.acceptedAt && !i.revokedAt)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function getInviteById(id: string): Invite | undefined {
+  return invites.find((i) => i.id === id);
+}
+
+export function findInviteByTokenHash(tokenHash: string): Invite | undefined {
+  return invites.find((i) => i.tokenHash === tokenHash);
+}
+
+export function createInvite(input: InviteInput, tokenHash: string, invitedById: string, now = new Date()): Invite {
+  inviteSeq += 1;
+  const invite: Invite = {
+    id: `i${inviteSeq}`,
+    email: input.email,
+    accessRole: input.accessRole,
+    position: input.position,
+    tokenHash,
+    invitedById,
+    createdAt: now.toISOString(),
+    expiresAt: inviteExpiry(now),
+    acceptedAt: null,
+    acceptedMemberId: null,
+    revokedAt: null,
+  };
+  invites.push(invite);
+  return invite;
+}
+
+export function renewInvite(id: string, tokenHash: string, now = new Date()): Invite | undefined {
+  const invite = invites.find((i) => i.id === id);
+  if (!invite || invite.acceptedAt || invite.revokedAt) return undefined;
+  invite.tokenHash = tokenHash;
+  invite.expiresAt = inviteExpiry(now);
+  return invite;
+}
+
+export function revokeInvite(id: string, now = new Date()): Invite | undefined {
+  const invite = invites.find((i) => i.id === id);
+  if (!invite || invite.acceptedAt || invite.revokedAt) return undefined;
+  invite.revokedAt = now.toISOString();
+  return invite;
+}
+
+const NEW_MEMBER_COLORS = ["#0891b2", "#7c3aed", "#ea580c", "#65a30d", "#be123c", "#0d9488"];
+
+function initialsFor(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+}
+
+export function acceptInvite(
+  inviteId: string,
+  profile: { name: string; passwordHash: string },
+  now = new Date(),
+): Member | undefined {
+  const invite = invites.find((i) => i.id === inviteId);
+  if (!invite || inviteState(invite, now) !== "pending" || getMemberByEmail(invite.email)) return undefined;
+  memberSeq += 1;
+  const member: Member = {
+    id: `m${memberSeq}`,
+    name: profile.name,
+    initials: initialsFor(profile.name),
+    color: NEW_MEMBER_COLORS[(memberSeq - 1) % NEW_MEMBER_COLORS.length],
+    role: invite.position || "Committee member",
+    accessRole: invite.accessRole,
+    email: invite.email,
+    passwordHash: profile.passwordHash,
+  };
+  members.push(member);
+  invite.acceptedAt = now.toISOString();
+  invite.acceptedMemberId = member.id;
+  bumpWorkspaceVersion();
+  return member;
 }
 
 export interface DashboardStats {

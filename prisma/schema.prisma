@@ -29,24 +29,30 @@ enum AccessRole {
 }
 
 model Member {
-  id         String     @id @default(cuid())
-  name       String
-  initials   String
-  color      String
-  role       String
-  accessRole AccessRole @default(COMMITTEE_MEMBER)
-  tasks      Task[]     @relation("TaskAssignees")
+  id             String             @id @default(cuid())
+  name           String
+  initials       String
+  color          String
+  role           String
+  accessRole     AccessRole         @default(COMMITTEE_MEMBER)
+  email          String             @unique
+  passwordHash   String
+  tasks          Task[]             @relation("TaskAssignees")
+  statusChanges  TaskStatusChange[]
+  reminders      TaskReminder[]
+  invitesSent    Invite[]           @relation("InvitesSent")
+  acceptedInvite Invite?            @relation("InviteAccepted")
 }
 
 model Event {
-  id          String   @id @default(cuid())
+  id          String       @id @default(cuid())
   title       String
   date        DateTime
-  location    String   @default("")
-  description String   @default("")
+  location    String       @default("")
+  description String       @default("")
   tasks       Task[]
   budgetItems BudgetItem[]
-  createdAt   DateTime @default(now())
+  createdAt   DateTime     @default(now())
 }
 
 // F_REQ-7 — amounts are integer cents in AUD. actualCents is null until spend is recorded.
@@ -63,16 +69,69 @@ model BudgetItem {
 }
 
 model Task {
-  id          String     @id @default(cuid())
-  title       String
-  description String     @default("")
-  status      TaskStatus @default(TODO)
-  priority    Priority   @default(MEDIUM)
-  dueDate     DateTime?
-  assignees   Member[]   @relation("TaskAssignees")
-  event       Event?     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  eventId     String?
-  createdAt   DateTime   @default(now())
+  id            String             @id @default(cuid())
+  title         String
+  description   String             @default("")
+  status        TaskStatus         @default(TODO)
+  priority      Priority           @default(MEDIUM)
+  dueDate       DateTime?
+  assignees     Member[]           @relation("TaskAssignees")
+  event         Event?             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId       String?
+  createdAt     DateTime           @default(now())
+  statusChanges TaskStatusChange[]
+  reminders     TaskReminder[]
 
   @@index([eventId])
+}
+
+model TaskStatusChange {
+  id         String     @id @default(cuid())
+  task       Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId     String
+  fromStatus TaskStatus
+  toStatus   TaskStatus
+  actor      Member?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId    String?
+  at         DateTime   @default(now())
+
+  @@index([taskId, at])
+}
+
+enum ReminderKind {
+  DUE_SOON
+  OVERDUE
+}
+
+model TaskReminder {
+  id       String       @id @default(cuid())
+  task     Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId   String
+  member   Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  memberId String
+  kind     ReminderKind
+  dueDate  DateTime
+  firedAt  DateTime     @default(now())
+  readAt   DateTime?
+
+  @@unique([taskId, memberId, kind, dueDate])
+  @@index([memberId, readAt])
+}
+
+model Invite {
+  id               String     @id @default(cuid())
+  email            String
+  accessRole       AccessRole @default(COMMITTEE_MEMBER)
+  position         String     @default("")
+  tokenHash        String     @unique
+  invitedBy        Member     @relation("InvitesSent", fields: [invitedById], references: [id])
+  invitedById      String
+  createdAt        DateTime   @default(now())
+  expiresAt        DateTime
+  acceptedAt       DateTime?
+  acceptedMember   Member?    @relation("InviteAccepted", fields: [acceptedMemberId], references: [id], onDelete: SetNull)
+  acceptedMemberId String?    @unique
+  revokedAt        DateTime?
+
+  @@index([email])
 }

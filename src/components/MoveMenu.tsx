@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { TaskStatus } from "@/lib/types";
 import { STATUS_LABEL, STATUS_ORDER } from "@/lib/types";
@@ -9,12 +9,24 @@ import { moveTaskAction } from "@/app/actions";
 export default function MoveMenu({ taskId, status }: { taskId: string; status: TaskStatus }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(null), 4000);
+    return () => clearTimeout(timer);
+  }, [error]);
 
   function move(next: TaskStatus) {
     setOpen(false);
+    setError(null);
     startTransition(async () => {
-      await moveTaskAction(taskId, next);
+      const result = await moveTaskAction(taskId, next);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
       router.refresh();
     });
   }
@@ -49,6 +61,14 @@ export default function MoveMenu({ taskId, status }: { taskId: string; status: T
             ))}
           </div>
         </>
+      )}
+      {error && (
+        <div
+          role="alert"
+          className="absolute right-0 z-20 mt-1 w-56 rounded-xl bg-[var(--danger-soft)] px-3 py-2 text-xs font-medium text-[var(--danger)] shadow-lg"
+        >
+          {error}
+        </div>
       )}
     </div>
   );
