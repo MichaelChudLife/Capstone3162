@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 export default async function RemindersPage() {
   const user = await requireCurrentMember();
-  const reminders = getReminders();
+  const reminders = getReminders(user);
 
   return (
     <AppShell user={user}>
