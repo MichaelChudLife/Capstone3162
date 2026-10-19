@@ -56,7 +56,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <StatusPill status={task.status} />
-        {canUpdate && !canEdit && <MoveMenu taskId={task.id} status={task.status} />}
+        {canUpdate && <MoveMenu taskId={task.id} status={task.status} />}
         <PriorityTag priority={task.priority} />
         {task.dueDate && task.status !== "DONE" && <DueBadge dueDate={task.dueDate} />}
         {assignees.length === 0 && <UnassignedFlag />}

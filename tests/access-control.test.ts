@@ -39,6 +39,19 @@ describe("TC-005 · F_REQ-5 Committee Member can only update self-assigned tasks
     expect(ws.data.getTaskById("t5")?.status).toBe("DONE");
   });
 
+  it("assignees without update_own_tasks can still move their assigned task", async () => {
+    ws.data.setCurrentUserId("m2");
+    ws.data.updateMemberAccessRole("m2", "Events Director");
+    const task = ws.data.getTaskById("t3")!;
+    expect(task.assigneeIds).toContain("m2");
+    expect(ws.data.hasPermission("update_own_tasks", ws.data.getCurrentUser())).toBe(false);
+    expect(ws.data.canUpdateTask(task)).toBe(true);
+
+    await ws.app.moveTaskAction("t3", "IN_PROGRESS");
+
+    expect(ws.data.getTaskById("t3")?.status).toBe("IN_PROGRESS");
+  });
+
   it("cannot update the status of a task assigned to someone else", async () => {
     ws.actAs("Committee Member");
     const task = ws.data.getTaskById("t3")!; // seeded assigned to m2, not the current user
