@@ -7,8 +7,15 @@ export function proxy(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const memberId = token ? verifySessionToken(token) : null;
 
-  if (request.nextUrl.pathname === "/login") {
+  const { pathname } = request.nextUrl;
+
+  if (pathname === "/login") {
     if (memberId) return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.next();
+  }
+
+  if (pathname === "/api/live") {
+    if (!memberId) return NextResponse.json({ signedIn: false }, { status: 401 });
     return NextResponse.next();
   }
 

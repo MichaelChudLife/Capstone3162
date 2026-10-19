@@ -1,7 +1,7 @@
 "use server";
 
 import { createTask, getEvents, getMembers, getTaskById, hasPermission, updateTask } from "@/lib/data";
-import { syncCurrentUserFromSession } from "@/lib/auth";
+import { currentActor, syncCurrentUserFromSession } from "@/lib/auth";
 import { validateTaskInput, type TaskValidationContext } from "@/lib/validation";
 import { denied, invalid, missing, ok } from "@/lib/action-result";
 import { revalidateWorkspace } from "@/lib/revalidate";
@@ -26,13 +26,13 @@ export async function createTaskAction(input: TaskInput): Promise<ActionResult<{
 }
 
 export async function updateTaskAction(id: string, input: TaskInput): Promise<ActionResult<{ id: string }>> {
-  await syncCurrentUserFromSession();
-  if (!hasPermission("manage_tasks")) return denied("edit tasks");
+  const actor = await currentActor();
+  if (!hasPermission("manage_tasks", actor)) return denied("edit tasks");
   const existing = getTaskById(id);
   if (!existing) return missing("task");
   const result = validateTaskInput(input, validationContext(existing.dueDate));
   if (!result.ok) return invalid(result.errors);
-  updateTask(id, result.value);
+  updateTask(id, result.value, actor.id);
   revalidateWorkspace();
   return ok({ id });
 }
