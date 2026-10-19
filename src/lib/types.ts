@@ -120,6 +120,32 @@ export interface TaskReminder {
   readAt: string | null;
 }
 
+export interface Invite {
+  id: string;
+  email: string;
+  accessRole: AccessRole;
+  position: string;
+  tokenHash: string;
+  invitedById: string;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  acceptedMemberId: string | null;
+  revokedAt: string | null;
+}
+
+export interface InviteInput {
+  email: string;
+  accessRole: AccessRole;
+  position: string;
+}
+
+export interface SignupInput {
+  name: string;
+  password: string;
+  confirmPassword: string;
+}
+
 export type FieldErrors<K extends string = string> = Partial<Record<K, string>>;
 
 export type ActionResult<T = null> =

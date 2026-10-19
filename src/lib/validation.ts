@@ -1,10 +1,13 @@
 import { MAX_AMOUNT_CENTS } from "./money";
 import {
+  ACCESS_ROLES,
   PRIORITY_ORDER,
   STATUS_ORDER,
   type BudgetItemInput,
   type EventInput,
   type FieldErrors,
+  type InviteInput,
+  type SignupInput,
   type TaskInput,
 } from "./types";
 
@@ -15,6 +18,11 @@ export const LIMITS = {
   taskTitle: 120,
   taskDescription: 2000,
   budgetDescription: 120,
+  email: 254,
+  position: 60,
+  memberName: 80,
+  passwordMin: 10,
+  passwordMax: 128,
 } as const;
 
 export type Validation<T, K extends string> =
@@ -141,4 +149,52 @@ export function validateBudgetItemInput(
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   return { ok: true, value: { description, expectedCents: raw.expectedCents, actualCents } };
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function normaliseEmail(email: string): string {
+  return (email ?? "").trim().toLowerCase();
+}
+
+export function validateInviteInput(
+  raw: InviteInput,
+  context: { takenEmails: string[] },
+): Validation<InviteInput, keyof InviteInput> {
+  const errors: FieldErrors<keyof InviteInput> = {};
+  const email = normaliseEmail(raw.email);
+  const position = (raw.position ?? "").trim();
+
+  if (!email) errors.email = "Enter the new member's email.";
+  else if (email.length > LIMITS.email || !EMAIL_PATTERN.test(email)) errors.email = "That email address isn't valid.";
+  else if (context.takenEmails.map(normaliseEmail).includes(email)) {
+    errors.email = "This email already has an account or an open invite.";
+  }
+
+  if (!ACCESS_ROLES.includes(raw.accessRole)) errors.accessRole = "Choose an access role.";
+
+  if (position.length > LIMITS.position) errors.position = `Keep the position under ${LIMITS.position} characters.`;
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+  return { ok: true, value: { email, accessRole: raw.accessRole, position } };
+}
+
+export function validateSignupInput(raw: SignupInput, context: { email: string }): Validation<SignupInput, keyof SignupInput> {
+  const errors: FieldErrors<keyof SignupInput> = {};
+  const name = (raw.name ?? "").trim().replace(/\s+/g, " ");
+  const password = raw.password ?? "";
+
+  if (name.length < 2) errors.name = "Enter your full name.";
+  else if (name.length > LIMITS.memberName) errors.name = `Keep your name under ${LIMITS.memberName} characters.`;
+
+  if (password.length < LIMITS.passwordMin) errors.password = `Use at least ${LIMITS.passwordMin} characters.`;
+  else if (password.length > LIMITS.passwordMax) errors.password = `Use at most ${LIMITS.passwordMax} characters.`;
+  else if (password.toLowerCase() === normaliseEmail(context.email)) errors.password = "Don't use your email as your password.";
+
+  if (!errors.password && raw.confirmPassword !== password) errors.confirmPassword = "Passwords don't match.";
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+  return { ok: true, value: { name, password, confirmPassword: password } };
 }

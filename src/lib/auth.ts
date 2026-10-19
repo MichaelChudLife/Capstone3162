@@ -90,6 +90,8 @@ export async function currentActor(): Promise<Member> {
 export async function requireCurrentMember(): Promise<Member> {
   const memberId = await getSessionMemberId();
   if (!memberId) redirect("/login");
-  setCurrentUserId(memberId);
-  return getCurrentUser();
+  const member = getMemberById(memberId);
+  if (!member) redirect("/login?signedout=1");
+  setCurrentUserId(member.id);
+  return member;
 }

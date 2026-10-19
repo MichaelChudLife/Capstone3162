@@ -29,15 +29,19 @@ enum AccessRole {
 }
 
 model Member {
-  id            String             @id @default(cuid())
-  name          String
-  initials      String
-  color         String
-  role          String
-  accessRole    AccessRole         @default(COMMITTEE_MEMBER)
-  tasks         Task[]             @relation("TaskAssignees")
-  statusChanges TaskStatusChange[]
-  reminders     TaskReminder[]
+  id             String             @id @default(cuid())
+  name           String
+  initials       String
+  color          String
+  role           String
+  accessRole     AccessRole         @default(COMMITTEE_MEMBER)
+  email          String             @unique
+  passwordHash   String
+  tasks          Task[]             @relation("TaskAssignees")
+  statusChanges  TaskStatusChange[]
+  reminders      TaskReminder[]
+  invitesSent    Invite[]           @relation("InvitesSent")
+  acceptedInvite Invite?            @relation("InviteAccepted")
 }
 
 model Event {
@@ -112,4 +116,22 @@ model TaskReminder {
 
   @@unique([taskId, memberId, kind, dueDate])
   @@index([memberId, readAt])
+}
+
+model Invite {
+  id               String     @id @default(cuid())
+  email            String
+  accessRole       AccessRole @default(COMMITTEE_MEMBER)
+  position         String     @default("")
+  tokenHash        String     @unique
+  invitedBy        Member     @relation("InvitesSent", fields: [invitedById], references: [id])
+  invitedById      String
+  createdAt        DateTime   @default(now())
+  expiresAt        DateTime
+  acceptedAt       DateTime?
+  acceptedMember   Member?    @relation("InviteAccepted", fields: [acceptedMemberId], references: [id], onDelete: SetNull)
+  acceptedMemberId String?    @unique
+  revokedAt        DateTime?
+
+  @@index([email])
 }
