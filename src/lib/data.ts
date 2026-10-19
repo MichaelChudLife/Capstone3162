@@ -11,6 +11,7 @@ import {
   type Permission,
   type EventInput,
   type TaskInput,
+  type StatusChange,
 } from "./types";
 import { hashPassword } from "./password";
 import { summariseBudget, type BudgetSummary } from "./money";
@@ -256,6 +257,13 @@ export const tasks: Task[] = [
   },
 ];
 
+export const statusChanges: StatusChange[] = [
+  { id: "s1", taskId: "t1", from: "TODO", to: "IN_PROGRESS", actorId: "m4", at: dayOffset(-2, 10, 15) },
+  { id: "s2", taskId: "t2", from: "TODO", to: "IN_PROGRESS", actorId: "m3", at: dayOffset(-2, 14, 40) },
+  { id: "s3", taskId: "t8", from: "TODO", to: "IN_PROGRESS", actorId: "m3", at: dayOffset(-6, 9, 5) },
+  { id: "s4", taskId: "t8", from: "IN_PROGRESS", to: "DONE", actorId: "m3", at: dayOffset(-5, 16, 30) },
+];
+
 // Amounts are integer cents (AUD). Items with a null `actualCents` have no
 // spend recorded yet.
 export const budgetItems: BudgetItem[] = [
@@ -268,6 +276,17 @@ export const budgetItems: BudgetItem[] = [
 ];
 
 let taskSeq = tasks.length;
+let statusSeq = statusChanges.length;
+const live = ((globalThis as { __ccaHubLive?: { version: number } }).__ccaHubLive ??= { version: 1 });
+
+export function getWorkspaceVersion(): number {
+  return live.version;
+}
+
+export function bumpWorkspaceVersion(): number {
+  live.version += 1;
+  return live.version;
+}
 let eventSeq = events.length;
 let budgetSeq = budgetItems.length;
 
@@ -334,6 +353,7 @@ export function deleteEvent(id: string): { event: CcaEvent; removedTaskIds: stri
       tasks.splice(i, 1);
     }
   }
+  removeWhere(statusChanges, (c) => removedTaskIds.includes(c.taskId));
   return { event, removedTaskIds: removedTaskIds.reverse() };
 }
 
@@ -376,6 +396,12 @@ export function deleteBudgetItem(id: string): BudgetItem | undefined {
   return budgetItems.splice(index, 1)[0];
 }
 
+function removeWhere<T>(list: T[], predicate: (item: T) => boolean): void {
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    if (predicate(list[i])) list.splice(i, 1);
+  }
+}
+
 export function getTasks(): Task[] {
   return tasks;
 }
@@ -411,16 +437,36 @@ export function createTask(input: TaskInput): Task {
   return task;
 }
 
-export function updateTask(id: string, input: TaskInput): Task | undefined {
+export function updateTask(id: string, input: TaskInput, actorId = currentUserId): Task | undefined {
   const task = tasks.find((t) => t.id === id);
   if (!task) return undefined;
+  const previous = task.status;
   Object.assign(task, { ...input, assigneeIds: [...input.assigneeIds] });
+  if (previous !== task.status) recordStatusChange(task.id, previous, task.status, actorId);
   return task;
 }
 
-export function setTaskStatus(id: string, status: TaskStatus): void {
+function recordStatusChange(taskId: string, from: TaskStatus, to: TaskStatus, actorId: string): StatusChange {
+  statusSeq += 1;
+  const change: StatusChange = { id: `s${statusSeq}`, taskId, from, to, actorId, at: new Date().toISOString() };
+  statusChanges.push(change);
+  return change;
+}
+
+export function setTaskStatus(id: string, status: TaskStatus, actorId = currentUserId): StatusChange | null {
   const task = tasks.find((t) => t.id === id);
-  if (task) task.status = status;
+  if (!task || task.status === status) return null;
+  const from = task.status;
+  task.status = status;
+  return recordStatusChange(id, from, status, actorId);
+}
+
+export function getStatusHistory(taskId: string): StatusChange[] {
+  return statusChanges
+    .filter((c) => c.taskId === taskId)
+    .map((c, index) => ({ c, index }))
+    .sort((a, b) => b.c.at.localeCompare(a.c.at) || b.index - a.index)
+    .map(({ c }) => c);
 }
 
 export interface Reminder {

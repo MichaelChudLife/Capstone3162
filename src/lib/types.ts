@@ -99,6 +99,15 @@ export interface BudgetItemInput {
   actualCents: number | null;
 }
 
+export interface StatusChange {
+  id: string;
+  taskId: string;
+  from: TaskStatus;
+  to: TaskStatus;
+  actorId: string;
+  at: string;
+}
+
 export type FieldErrors<K extends string = string> = Partial<Record<K, string>>;
 
 export type ActionResult<T = null> =

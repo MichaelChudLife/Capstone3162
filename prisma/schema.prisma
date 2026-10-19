@@ -29,24 +29,25 @@ enum AccessRole {
 }
 
 model Member {
-  id         String     @id @default(cuid())
-  name       String
-  initials   String
-  color      String
-  role       String
-  accessRole AccessRole @default(COMMITTEE_MEMBER)
-  tasks      Task[]     @relation("TaskAssignees")
+  id            String             @id @default(cuid())
+  name          String
+  initials      String
+  color         String
+  role          String
+  accessRole    AccessRole         @default(COMMITTEE_MEMBER)
+  tasks         Task[]             @relation("TaskAssignees")
+  statusChanges TaskStatusChange[]
 }
 
 model Event {
-  id          String   @id @default(cuid())
+  id          String       @id @default(cuid())
   title       String
   date        DateTime
-  location    String   @default("")
-  description String   @default("")
+  location    String       @default("")
+  description String       @default("")
   tasks       Task[]
   budgetItems BudgetItem[]
-  createdAt   DateTime @default(now())
+  createdAt   DateTime     @default(now())
 }
 
 // F_REQ-7 — amounts are integer cents in AUD. actualCents is null until spend is recorded.
@@ -63,16 +64,30 @@ model BudgetItem {
 }
 
 model Task {
-  id          String     @id @default(cuid())
-  title       String
-  description String     @default("")
-  status      TaskStatus @default(TODO)
-  priority    Priority   @default(MEDIUM)
-  dueDate     DateTime?
-  assignees   Member[]   @relation("TaskAssignees")
-  event       Event?     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  eventId     String?
-  createdAt   DateTime   @default(now())
+  id            String             @id @default(cuid())
+  title         String
+  description   String             @default("")
+  status        TaskStatus         @default(TODO)
+  priority      Priority           @default(MEDIUM)
+  dueDate       DateTime?
+  assignees     Member[]           @relation("TaskAssignees")
+  event         Event?             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId       String?
+  createdAt     DateTime           @default(now())
+  statusChanges TaskStatusChange[]
 
   @@index([eventId])
+}
+
+model TaskStatusChange {
+  id         String     @id @default(cuid())
+  task       Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId     String
+  fromStatus TaskStatus
+  toStatus   TaskStatus
+  actor      Member?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId    String?
+  at         DateTime   @default(now())
+
+  @@index([taskId, at])
 }
