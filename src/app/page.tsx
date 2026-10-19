@@ -57,13 +57,16 @@ export default async function DashboardPage() {
       <PageHeader title="Dashboard" subtitle={dateLine} />
 
       {stats.overdue > 0 && (
-        <div className="mb-5 flex items-center justify-between rounded-xl bg-[var(--danger-soft)] px-4 py-3">
-          <div className="flex items-center gap-2.5 text-sm font-medium text-[var(--danger)]">
+        <Link
+          href="/reminders"
+          className="group mb-5 flex items-center justify-between gap-3 rounded-xl bg-[var(--danger-soft)] px-4 py-3 transition-colors hover:bg-[#f8d4d4] focus-visible:outline-2 focus-visible:outline-[var(--danger)]"
+        >
+          <span className="flex items-center gap-2.5 text-sm font-medium text-[var(--danger)]">
             <AlertIcon width={17} height={17} />
-            {stats.overdue} of your task{stats.overdue > 1 ? "s are" : " is"} overdue · {within48} deadline{within48 === 1 ? "" : "s"} within 48 hours
-          </div>
-          <span className="text-sm font-semibold text-[var(--danger)]">Review →</span>
-        </div>
+            {stats.overdue} of your tasks {stats.overdue === 1 ? "is" : "are"} overdue · {within48} deadline{within48 === 1 ? "" : "s"} within 48 hours
+          </span>
+          <span className="shrink-0 text-sm font-semibold text-[var(--danger)] group-hover:underline">Review →</span>
+        </Link>
       )}
 
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
