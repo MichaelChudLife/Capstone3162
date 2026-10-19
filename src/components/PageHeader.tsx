@@ -1,9 +1,10 @@
-import { getReminders, getMembers, getEvents, hasPermission, getCurrentUser } from "@/lib/data";
-import { dueLabel } from "@/lib/format";
+import { getRemindersForMember, getMembers, getEvents, hasPermission } from "@/lib/data";
+import { requireCurrentMember } from "@/lib/auth";
+import { reminderLabel } from "@/lib/reminder-rules";
 import NotificationsBell, { type BellItem } from "@/components/NotificationsBell";
 import NewTaskButton from "@/components/NewTaskButton";
 
-export default function PageHeader({
+export default async function PageHeader({
   title,
   subtitle,
   actions,
@@ -12,12 +13,15 @@ export default function PageHeader({
   subtitle?: string;
   actions?: React.ReactNode;
 }) {
-  const user = getCurrentUser();
-  const items: BellItem[] = getReminders(user).map((r) => ({
-    id: r.task.id,
-    title: r.task.title,
-    label: dueLabel(r.task.dueDate),
-    urgency: r.urgency,
+  const user = await requireCurrentMember();
+  const now = new Date();
+  const items: BellItem[] = getRemindersForMember(user.id, now).map(({ reminder, task }) => ({
+    id: reminder.id,
+    taskId: task.id,
+    title: task.title,
+    label: reminderLabel(reminder.dueDate, now),
+    kind: reminder.kind,
+    unread: reminder.readAt === null,
   }));
 
   return (
@@ -28,12 +32,12 @@ export default function PageHeader({
       </div>
       <div className="flex flex-wrap items-center gap-3">
         {actions}
-        {hasPermission("manage_tasks") && <NewTaskButton members={getMembers()} events={getEvents()} />}
+        {hasPermission("manage_tasks", user) && <NewTaskButton members={getMembers()} events={getEvents()} />}
         <NotificationsBell items={items} />
         <span
           className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
           style={{ background: user.color }}
-          title={user.name}
+          title={`${user.name} · ${user.accessRole}`}
           aria-label={`Logged in as ${user.name}`}
         >
           {user.initials}

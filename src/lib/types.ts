@@ -108,6 +108,18 @@ export interface StatusChange {
   at: string;
 }
 
+export type ReminderKind = "due_soon" | "overdue";
+
+export interface TaskReminder {
+  id: string;
+  taskId: string;
+  memberId: string;
+  kind: ReminderKind;
+  dueDate: string;
+  firedAt: string;
+  readAt: string | null;
+}
+
 export type FieldErrors<K extends string = string> = Partial<Record<K, string>>;
 
 export type ActionResult<T = null> =

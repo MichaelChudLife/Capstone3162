@@ -12,13 +12,22 @@ import {
   type EventInput,
   type TaskInput,
   type StatusChange,
+  type TaskReminder,
+  type ReminderKind,
 } from "./types";
+import { DUE_SOON_HOURS, reminderKindFor } from "./reminder-rules";
 import { hashPassword } from "./password";
 import { summariseBudget, type BudgetSummary } from "./money";
 
 // Demo seed data only — every member shares this password so the app can be
 // tried out as any role. Not a pattern to carry into a real deployment.
 const DEMO_PASSWORD = "Committee2026!";
+
+function hoursOffset(hours: number): string {
+  const d = new Date(Date.now() + hours * 3600000);
+  d.setSeconds(0, 0);
+  return d.toISOString();
+}
 
 function dayOffset(days: number, hour = 17, minute = 0): string {
   const d = new Date();
@@ -255,6 +264,28 @@ export const tasks: Task[] = [
     eventId: "e1",
     createdAt: dayOffset(-1),
   },
+  {
+    id: "t15",
+    title: "Submit BBQ food safety checklist",
+    description: "Complete the campus food safety form and upload it to the events portal.",
+    status: "IN_PROGRESS",
+    priority: "HIGH",
+    dueDate: hoursOffset(20),
+    assigneeIds: ["m5"],
+    eventId: "e2",
+    createdAt: dayOffset(-3),
+  },
+  {
+    id: "t16",
+    title: "Send volunteer roster",
+    description: "Share the BBQ volunteer shifts with the committee group chat.",
+    status: "TODO",
+    priority: "MEDIUM",
+    dueDate: hoursOffset(-3),
+    assigneeIds: ["m5", "m4"],
+    eventId: "e2",
+    createdAt: dayOffset(-4),
+  },
 ];
 
 export const statusChanges: StatusChange[] = [
@@ -262,7 +293,10 @@ export const statusChanges: StatusChange[] = [
   { id: "s2", taskId: "t2", from: "TODO", to: "IN_PROGRESS", actorId: "m3", at: dayOffset(-2, 14, 40) },
   { id: "s3", taskId: "t8", from: "TODO", to: "IN_PROGRESS", actorId: "m3", at: dayOffset(-6, 9, 5) },
   { id: "s4", taskId: "t8", from: "IN_PROGRESS", to: "DONE", actorId: "m3", at: dayOffset(-5, 16, 30) },
+  { id: "s5", taskId: "t15", from: "TODO", to: "IN_PROGRESS", actorId: "m5", at: dayOffset(-1, 11, 20) },
 ];
+
+export const taskReminders: TaskReminder[] = [];
 
 // Amounts are integer cents (AUD). Items with a null `actualCents` have no
 // spend recorded yet.
@@ -277,6 +311,7 @@ export const budgetItems: BudgetItem[] = [
 
 let taskSeq = tasks.length;
 let statusSeq = statusChanges.length;
+let reminderSeq = 0;
 const live = ((globalThis as { __ccaHubLive?: { version: number } }).__ccaHubLive ??= { version: 1 });
 
 export function getWorkspaceVersion(): number {
@@ -354,6 +389,7 @@ export function deleteEvent(id: string): { event: CcaEvent; removedTaskIds: stri
     }
   }
   removeWhere(statusChanges, (c) => removedTaskIds.includes(c.taskId));
+  removeWhere(taskReminders, (r) => removedTaskIds.includes(r.taskId));
   return { event, removedTaskIds: removedTaskIds.reverse() };
 }
 
@@ -471,28 +507,102 @@ export function getStatusHistory(taskId: string): StatusChange[] {
 
 export interface Reminder {
   task: Task;
-  urgency: "overdue" | "today" | "soon";
-  daysUntil: number;
+  kind: ReminderKind;
 }
 
-export function getReminders(member = getCurrentUser()): Reminder[] {
+const KIND_RANK: Record<ReminderKind, number> = { overdue: 0, due_soon: 1 };
+
+export function getReminders(member = getCurrentUser(), now = new Date()): Reminder[] {
   const scoped = hasPermission("manage_tasks", member)
     ? tasks
     : tasks.filter((t) => t.assigneeIds.includes(member.id));
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const items: Reminder[] = [];
   for (const task of scoped) {
-    if (task.status === "DONE" || !task.dueDate) continue;
-    const due = new Date(task.dueDate);
-    const startOfDue = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
-    const daysUntil = Math.round((startOfDue - startOfToday) / 86400000);
-    if (daysUntil < 0) items.push({ task, urgency: "overdue", daysUntil });
-    else if (daysUntil === 0) items.push({ task, urgency: "today", daysUntil });
-    else if (daysUntil <= 3) items.push({ task, urgency: "soon", daysUntil });
+    const kind = reminderKindFor(task, now);
+    if (kind) items.push({ task, kind });
   }
-  const rank = { overdue: 0, today: 1, soon: 2 };
-  return items.sort((a, b) => rank[a.urgency] - rank[b.urgency] || a.daysUntil - b.daysUntil);
+  return items.sort((a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind] || (a.task.dueDate ?? "").localeCompare(b.task.dueDate ?? ""));
+}
+
+export function syncReminders(now = new Date()): number {
+  let fired = 0;
+  for (const task of tasks) {
+    const kind = reminderKindFor(task, now);
+    if (!kind || !task.dueDate) continue;
+    for (const memberId of task.assigneeIds) {
+      const exists = taskReminders.some(
+        (r) => r.taskId === task.id && r.memberId === memberId && r.kind === kind && r.dueDate === task.dueDate,
+      );
+      if (exists) continue;
+      reminderSeq += 1;
+      taskReminders.push({
+        id: `r${reminderSeq}`,
+        taskId: task.id,
+        memberId,
+        kind,
+        dueDate: task.dueDate,
+        firedAt: now.toISOString(),
+        readAt: null,
+      });
+      fired += 1;
+    }
+  }
+  if (fired > 0) bumpWorkspaceVersion();
+  return fired;
+}
+
+export function getNextReminderAt(now = new Date()): string | null {
+  let next: number | null = null;
+  for (const task of tasks) {
+    if (task.status === "DONE" || !task.dueDate || task.assigneeIds.length === 0) continue;
+    const due = new Date(task.dueDate).getTime();
+    for (const fireAt of [due - DUE_SOON_HOURS * 3600000, due]) {
+      if (fireAt > now.getTime() && (next === null || fireAt < next)) next = fireAt;
+    }
+  }
+  return next === null ? null : new Date(next).toISOString();
+}
+
+export interface MemberReminder {
+  reminder: TaskReminder;
+  task: Task;
+}
+
+export function getRemindersForMember(memberId: string, now = new Date()): MemberReminder[] {
+  syncReminders(now);
+  const active: MemberReminder[] = [];
+  for (const reminder of taskReminders) {
+    if (reminder.memberId !== memberId) continue;
+    const task = tasks.find((t) => t.id === reminder.taskId);
+    if (!task || task.status === "DONE" || task.dueDate !== reminder.dueDate || !task.assigneeIds.includes(memberId)) continue;
+    active.push({ reminder, task });
+  }
+  const overdue = new Set(active.filter((a) => a.reminder.kind === "overdue").map((a) => a.task.id));
+  return active
+    .filter((a) => !(a.reminder.kind === "due_soon" && overdue.has(a.task.id)))
+    .sort(
+      (a, b) =>
+        Number(a.reminder.readAt !== null) - Number(b.reminder.readAt !== null) ||
+        KIND_RANK[a.reminder.kind] - KIND_RANK[b.reminder.kind] ||
+        a.reminder.dueDate.localeCompare(b.reminder.dueDate),
+    );
+}
+
+export function markReminderRead(id: string, memberId: string, now = new Date()): boolean {
+  const reminder = taskReminders.find((r) => r.id === id && r.memberId === memberId);
+  if (!reminder) return false;
+  reminder.readAt ??= now.toISOString();
+  return true;
+}
+
+export function markAllRemindersRead(memberId: string, now = new Date()): number {
+  let count = 0;
+  for (const { reminder } of getRemindersForMember(memberId, now)) {
+    if (reminder.readAt) continue;
+    reminder.readAt = now.toISOString();
+    count += 1;
+  }
+  return count;
 }
 
 export interface DashboardStats {

@@ -5,13 +5,18 @@ import { useRouter } from "next/navigation";
 
 const POLL_MS = 3000;
 
-export default function LiveRefresh({ version }: { version: number }) {
+export default function LiveRefresh({ version, nextReminderAt }: { version: number; nextReminderAt: string | null }) {
   const router = useRouter();
   const seen = useRef(version);
+  const reminderDue = useRef<number | null>(null);
 
   useEffect(() => {
     seen.current = Math.max(seen.current, version);
   }, [version]);
+
+  useEffect(() => {
+    reminderDue.current = nextReminderAt ? new Date(nextReminderAt).getTime() : null;
+  }, [nextReminderAt]);
 
   useEffect(() => {
     let stopped = false;
@@ -21,6 +26,11 @@ export default function LiveRefresh({ version }: { version: number }) {
 
     async function check() {
       if (inFlight || document.visibilityState !== "visible") return;
+      if (reminderDue.current !== null && Date.now() >= reminderDue.current) {
+        reminderDue.current = null;
+        router.refresh();
+        return;
+      }
       inFlight = true;
       try {
         const res = await fetch("/api/live", { cache: "no-store", signal: controller.signal });
