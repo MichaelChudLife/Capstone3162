@@ -57,11 +57,10 @@ export function hasPermission(permission: Permission, member = getCurrentUser())
   return ROLE_PERMISSIONS[member.accessRole].includes(permission);
 }
 
-// Committee Directors (and other manage_tasks roles) can update any task.
-// Committee Members can only update the status of tasks assigned to them.
+// Directors with manage_tasks can update any task. Any assignee can move status on their own tasks.
 export function canUpdateTask(task: Task, member = getCurrentUser()): boolean {
   if (hasPermission("manage_tasks", member)) return true;
-  return hasPermission("update_own_tasks", member) && task.assigneeIds.includes(member.id);
+  return task.assigneeIds.includes(member.id);
 }
 
 export function updateMemberAccessRole(memberId: string, accessRole: AccessRole): void {
