@@ -4,7 +4,7 @@ Task and event management demo for the Commerce and Computing Association commit
 
 ## Features
 
-- **Authentication (F_REQ-8)** — members log in with email + password; sessions are a signed, httpOnly cookie that expires after 30 minutes of inactivity. `src/middleware.ts` blocks every route except `/login` for anyone without a valid session.
+- **Authentication (F_REQ-8)** — members log in with email + password; sessions are a signed, httpOnly cookie that expires after 30 minutes of inactivity. `src/proxy.ts` blocks every route except `/login` and invite links (`/invite/*`) for anyone without a valid session.
 - **Role-based access control (F_REQ-5)** — six access roles, each mapped to a set of permissions in `src/lib/types.ts`. The two required by spec: **Committee Director** (`manage_events` + `manage_tasks` — full create/edit/manage on events and tasks) and **Committee Member** (`view_workspace` + `update_own_tasks` — can see everything but can only move the status of tasks assigned to them, enforced both in the UI and in the server actions). Budgets use a separate `manage_budget` permission held by the IT, Committee, Events and Finance Directors; every other role can view budgets but not change them.
 - **Centralised dashboard (F_REQ-9)** — `/` shows the logged-in member's own overdue tasks, tasks due this week, open tasks, "My tasks" list, and upcoming events, personalised to whoever is signed in.
 - **Event & Task Management** — create and edit events (title, description, date, location); each event has a detail page with its sub-tasks nested underneath; deleting an event asks for confirmation and lists the sub-tasks it will remove.
@@ -47,11 +47,12 @@ it falls back to an insecure default otherwise (`src/lib/auth.ts`).
 |-------|--------|
 | `/` | Dashboard — stats, upcoming deadlines, reminders |
 | `/tasks` | Kanban task board with a move menu on each card |
-| `/tasks/[id]` | Task detail — description, assignees, deadline, priority, status; edit form |
+| `/tasks/[id]` | Task detail — description, assignees, deadline, priority; status control for the assignee or a director; Activity log of status changes |
 | `/events` | Events with sub-task progress and a preview of open sub-tasks; New Event button |
 | `/events/[id]` | Event detail — sub-tasks grouped by status, add sub-task, edit / delete event, and the event budget (expected vs actual, variance, AUD) |
-| `/reminders` | Reminders grouped by Overdue / Due today / Due soon |
+| `/reminders` | Your reminders grouped by Overdue / Due within 48 hours; directors also get a Whole committee view |
 | `/login` | Email + password login; redirects to `/` if already signed in |
+| `/invite/[token]` | Public sign-up page for an invite link — sets name and password, then signs the new member in |
 
 ## Tests
 
@@ -68,11 +69,15 @@ Unit tests live in `tests/` and are named by RTM test case, so results map strai
 | TC-002 | F_REQ-1.2 Event sub-tasks and delete confirmation | `tests/events.test.ts` |
 | TC-003 | F_REQ-1.3 Multiple assignees, unassigned permitted | `tests/tasks.test.ts` |
 | TC-004 | F_REQ-1.4 Description, deadline, priority; no past deadlines | `tests/tasks.test.ts` |
-| TC-005 | F_REQ-5 Committee Member can only update self-assigned tasks | `tests/access-control.test.ts` |
-| TC-006 | F_REQ-5 Committee Director has full event/task privileges | `tests/access-control.test.ts` |
+| TC-005 | F_REQ-2 Status updates across three states, logged with time and acting user, live refresh | `tests/status.test.ts`, `tests/components/status-control.test.tsx` |
+| TC-006 | F_REQ-3 Reminders at 48 hours and at the deadline, per assignee, in-app only | `tests/reminders.test.ts` |
+| TC-005 / TC-006 (label clash) | F_REQ-5 Committee Member can only update self-assigned tasks; Committee Director has full privileges | `tests/access-control.test.ts` — the RTM lists these as TC-008 / TC-009 |
+| — | F_REQ-8 Invite-only sign-up links | `tests/invites.test.ts` |
 | TC-010 | F_REQ-7 Budget — expected vs actual, variance calculated automatically, AUD | `tests/budget.test.ts` |
 
 Each suite also includes negative tests confirming that roles without the permission get a "You do not have access" result.
+
+`tests/**/*.test.ts` run in Node; `tests/**/*.test.tsx` are React Testing Library component tests and run in jsdom (two Vitest projects in `vitest.config.mts`).
 
 These tests exercise permission logic (`hasPermission`, `canUpdateTask`) directly and don't
 go through HTTP, so they don't touch the session cookie — `tests/helpers.ts`'s `actAs(role)`
@@ -89,7 +94,7 @@ keeps switching the fixed test identity's access role, same as before auth was a
 | `src/lib/action-result.ts` | `ok` / `denied` / `invalid` helpers for server action results |
 | `src/lib/password.ts` | scrypt password hashing (`hashPassword`, `verifyPassword`) |
 | `src/lib/auth.ts` | Session cookie sign/verify/create/destroy, `requireCurrentMember` (pages), `syncCurrentUserFromSession` (server actions) |
-| `src/middleware.ts` | Route gate for F_REQ-8 — redirects to `/login` without a valid session; Edge-runtime, so it re-implements cookie verification with Web Crypto instead of importing `lib/auth.ts` |
+| `src/proxy.ts` | Route gate for F_REQ-8 — redirects to `/login` without a valid session, lets `/invite/*` through, and slides the 30-minute session on every request except the `/api/live` poll |
 | `src/app/login/actions.ts` | `loginAction` (checks credentials, creates the session), `logoutAction` |
 | `src/app/events/actions.ts` | Create, update and delete event server actions (`manage_events`) |
 | `src/app/events/budget-actions.ts` | Create, update and delete budget item server actions (`manage_budget`) |
@@ -99,6 +104,29 @@ keeps switching the fixed test identity's access role, same as before auth was a
 | `src/components/EventFormDialog.tsx`, `TaskFormDialog.tsx` | Create/edit forms used across pages |
 | `src/components/BudgetSection.tsx` | Budget table and totals on the event page; `BudgetItemDialog`, `AddBudgetItemButton` and `BudgetItemActions` handle add / edit / delete |
 | `src/components/LoginForm.tsx`, `LogoutButton.tsx` | Client-side login form and sidebar logout control |
+| `src/lib/reminder-rules.ts` | F_REQ-3 rule: `reminderKindFor` (due within 48 hours / overdue) and reminder labels — pure, takes `now` |
+| `src/app/api/live/route.ts`, `src/components/LiveRefresh.tsx` | F_REQ-2 live updates: pages poll a change counter every 3 s and refresh when it moves |
+| `src/components/StatusControl.tsx`, `StatusHistory.tsx` | Status buttons and the Activity log on the task page |
+| `src/app/reminders/actions.ts`, `src/components/NotificationsBell.tsx` | Mark reminders read; the personal reminder bell |
+| `src/lib/invite-token.ts`, `src/lib/invites.ts` | Invite token generation and hashing; invite validity checks |
+| `src/app/members/invite-actions.ts`, `src/app/invite/[token]/actions.ts` | Create / renew / cancel invites (`manage_access`); accept an invite and create the account |
+
+## Status updates and reminders (F_REQ-2, F_REQ-3)
+
+**Demo:** log in as `yunsoo@cca.org.au` in one browser and `sener@cca.org.au` in a private window.
+
+- **Status (F_REQ-2)** — as Sener, open *Book Woodside room 3.01* and press **Completed**. YunSoo's open page updates within about 3 seconds without a reload, and both see the change in **Activity** with Sener's name and the time. Members only get the status control on tasks assigned to them; a director gets it on every task.
+- **Live updates** — every change bumps a workspace counter. Open pages poll `/api/live` every 3 seconds (paused while the tab is hidden) and refresh when it moves. Polling does not extend the 30-minute session.
+- **Reminders (F_REQ-3)** — each assignee gets one reminder when a deadline is within 48 hours and another once it passes; the overdue one replaces the 48-hour one. Completing a task clears its reminders, and moving the deadline re-arms them. In-app only — no email.
+- **Seeded for the demo** — Sener has *Submit BBQ food safety checklist* due in about 20 hours and *Send volunteer roster*, which is already overdue.
+
+## Invite links (F_REQ-8)
+
+Log in as the IT Director (`michael@cca.org.au`), open **Members** and choose **Invite member**.
+
+- Enter the email, access role and an optional position. The app shows a one-time link to copy and send — it doesn't email anyone.
+- Links expire after 7 days and work once. Only a SHA-256 hash of the token is stored, so a lost link can't be shown again; use **New link** under Pending invites (the old link stops working) or **Cancel invite**.
+- The invitee sets their name and a password (at least 10 characters) and is signed straight in with the invited role.
 
 ## Event budget (F_REQ-7)
 
