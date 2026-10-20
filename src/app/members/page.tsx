@@ -1,6 +1,6 @@
 import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
-import { getMemberById, getMembers, getOpenInvites, hasPermission, inviteState } from "@/lib/data";
+import { getMembers, getOpenInvites, hasPermission, inviteState } from "@/lib/data";
 import { requireCurrentMember } from "@/lib/auth";
 import { Avatar } from "@/components/ui";
 import RoleSelect from "@/components/RoleSelect";
@@ -21,10 +21,10 @@ const perms: { role: string; desc: string }[] = [
 
 export default async function MembersPage() {
   const user = await requireCurrentMember();
-  const members = getMembers();
   const canManageAccess = user.accessRole === "IT Director";
   const canInvite = hasPermission("manage_access", user);
-  const openInvites = canInvite ? getOpenInvites() : [];
+  const [members, openInvites] = await Promise.all([getMembers(), canInvite ? getOpenInvites() : []]);
+  const memberById = new Map(members.map((member) => [member.id, member]));
 
   return (
     <AppShell user={user}>
@@ -77,7 +77,7 @@ export default async function MembersPage() {
             <ul>
               {openInvites.map((invite) => {
                 const expired = inviteState(invite) === "expired";
-                const inviter = getMemberById(invite.invitedById);
+                const inviter = memberById.get(invite.invitedById);
                 return (
                   <li key={invite.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--border)] px-4 py-3.5">
                     <div className="min-w-0 flex-1 basis-56">

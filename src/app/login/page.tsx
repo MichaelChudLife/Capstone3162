@@ -20,7 +20,7 @@ function Check() {
 
 export default async function LoginPage() {
   const memberId = await getSessionMemberId();
-  if (memberId && getMemberById(memberId)) redirect("/");
+  if (memberId && (await getMemberById(memberId))) redirect("/");
 
   const features = [
     "Events and tasks in one shared workspace",

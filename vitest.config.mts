@@ -9,15 +9,22 @@ export default defineConfig({
     jsx: "automatic",
   },
   test: {
-    setupFiles: ["tests/setup.ts"],
     projects: [
       {
         extends: true,
-        test: { name: "unit", environment: "node", include: ["tests/**/*.test.ts"] },
+        test: {
+          name: "unit",
+          environment: "node",
+          include: ["tests/**/*.test.ts"],
+          globalSetup: ["tests/global-setup.ts"],
+          setupFiles: ["tests/setup.ts", "tests/setup-db.ts"],
+          testTimeout: 20000,
+          hookTimeout: 60000,
+        },
       },
       {
         extends: true,
-        test: { name: "components", environment: "jsdom", include: ["tests/**/*.test.tsx"] },
+        test: { name: "components", environment: "jsdom", include: ["tests/**/*.test.tsx"], setupFiles: ["tests/setup.ts"] },
       },
     ],
   },

@@ -12,8 +12,8 @@ beforeEach(async () => {
 });
 
 describe("F_REQ-8 · Password hashes stay on the server", () => {
-  it("leaves the hash off every member record that pages hand to components", () => {
-    const records = [...ws.data.getMembers(), ws.data.getCurrentUser(), ws.data.getMemberById("m2")];
+  it("leaves the hash off every member record that pages hand to components", async () => {
+    const records = [...(await ws.data.getMembers()), await ws.user(), await ws.data.getMemberById("m2")];
 
     for (const member of records) {
       expect(member).not.toHaveProperty("passwordHash");
@@ -21,14 +21,14 @@ describe("F_REQ-8 · Password hashes stay on the server", () => {
     }
   });
 
-  it("still signs a member in with the right password", () => {
-    expect(ws.data.authenticate("michael@cca.org.au", DEMO_PASSWORD)?.id).toBe("m1");
-    expect(ws.data.authenticate("  Sener@CCA.org.au ", DEMO_PASSWORD)?.id).toBe("m5");
+  it("still signs a member in with the right password", async () => {
+    expect((await ws.data.authenticate("michael@cca.org.au", DEMO_PASSWORD))?.id).toBe("m1");
+    expect((await ws.data.authenticate("  Sener@CCA.org.au ", DEMO_PASSWORD))?.id).toBe("m5");
   });
 
-  it("refuses a wrong password or an unknown email", () => {
-    expect(ws.data.authenticate("michael@cca.org.au", "committee2026!")).toBeUndefined();
-    expect(ws.data.authenticate("michael@cca.org.au", "")).toBeUndefined();
-    expect(ws.data.authenticate("nobody@cca.org.au", DEMO_PASSWORD)).toBeUndefined();
+  it("refuses a wrong password or an unknown email", async () => {
+    expect(await ws.data.authenticate("michael@cca.org.au", "committee2026!")).toBeUndefined();
+    expect(await ws.data.authenticate("michael@cca.org.au", "")).toBeUndefined();
+    expect(await ws.data.authenticate("nobody@cca.org.au", DEMO_PASSWORD)).toBeUndefined();
   });
 });

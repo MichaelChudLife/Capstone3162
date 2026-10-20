@@ -103,7 +103,7 @@ export interface StatusChange {
   taskId: string;
   from: TaskStatus;
   to: TaskStatus;
-  actorId: string;
+  actorId: string | null;
   at: string;
 }
 

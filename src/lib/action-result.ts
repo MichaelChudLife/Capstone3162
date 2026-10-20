@@ -21,3 +21,7 @@ export function missing(what: string): ActionResult<never> {
 export function refused(message: string): ActionResult<never> {
   return { ok: false, message };
 }
+
+export function signedOut(): ActionResult<never> {
+  return { ok: false, message: "Your session has ended. Log in again to continue." };
+}

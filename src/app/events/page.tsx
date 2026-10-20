@@ -2,7 +2,7 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
 import NewEventButton from "@/components/NewEventButton";
-import { getEvents, getMembersByIds, getTasksForEvent, hasPermission } from "@/lib/data";
+import { compareByDeadlineThenPriority, getEvents, getMembers, getTasks, hasPermission } from "@/lib/data";
 import { requireCurrentMember } from "@/lib/auth";
 import { AvatarStack, StatusPill } from "@/components/ui";
 import { MapPinIcon, CalendarIcon } from "@/components/icons";
@@ -23,7 +23,8 @@ const PREVIEW_COUNT = 3;
 
 export default async function EventsPage() {
   const user = await requireCurrentMember();
-  const events = getEvents();
+  const [events, tasks, members] = await Promise.all([getEvents(), getTasks(), getMembers()]);
+  const memberById = new Map(members.map((member) => [member.id, member]));
   const canManageEvents = hasPermission("manage_events", user);
 
   return (
@@ -46,11 +47,11 @@ export default async function EventsPage() {
 
         <div className="grid gap-5 md:grid-cols-2">
           {events.map((ev) => {
-            const subTasks = getTasksForEvent(ev.id);
+            const subTasks = tasks.filter((t) => t.eventId === ev.id).sort(compareByDeadlineThenPriority);
             const done = subTasks.filter((t) => t.status === "DONE").length;
             const open = subTasks.filter((t) => t.status !== "DONE");
             const pct = subTasks.length ? Math.round((done / subTasks.length) * 100) : 0;
-            const assignees = getMembersByIds([...new Set(subTasks.flatMap((t) => t.assigneeIds))]);
+            const assignees = [...new Set(subTasks.flatMap((t) => t.assigneeIds))].flatMap((id) => memberById.get(id) ?? []);
             const { day, month, time, weekday } = dateParts(ev.date);
             return (
               <article key={ev.id} className="card flex flex-col p-5">

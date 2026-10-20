@@ -8,9 +8,9 @@ import {
   hasPermission,
   updateBudgetItem,
 } from "@/lib/data";
-import { syncCurrentUserFromSession } from "@/lib/auth";
+import { currentActor } from "@/lib/auth";
 import { validateBudgetItemInput } from "@/lib/validation";
-import { denied, invalid, missing, ok } from "@/lib/action-result";
+import { denied, invalid, missing, ok, signedOut } from "@/lib/action-result";
 import { revalidateWorkspace } from "@/lib/revalidate";
 import type { ActionResult, BudgetItemInput } from "@/lib/types";
 
@@ -18,13 +18,14 @@ export async function createBudgetItemAction(
   eventId: string,
   input: BudgetItemInput,
 ): Promise<ActionResult<{ id: string }>> {
-  await syncCurrentUserFromSession();
-  if (!hasPermission("manage_budget")) return denied("edit budgets");
-  if (!getEventById(eventId)) return missing("event");
+  const actor = await currentActor();
+  if (!actor) return signedOut();
+  if (!hasPermission("manage_budget", actor)) return denied("edit budgets");
+  if (!(await getEventById(eventId))) return missing("event");
   const result = validateBudgetItemInput(input);
   if (!result.ok) return invalid(result.errors);
-  const item = createBudgetItem(eventId, result.value);
-  revalidateWorkspace();
+  const item = await createBudgetItem(eventId, result.value);
+  await revalidateWorkspace();
   return ok({ id: item.id });
 }
 
@@ -32,20 +33,22 @@ export async function updateBudgetItemAction(
   id: string,
   input: BudgetItemInput,
 ): Promise<ActionResult<{ id: string }>> {
-  await syncCurrentUserFromSession();
-  if (!hasPermission("manage_budget")) return denied("edit budgets");
-  if (!getBudgetItemById(id)) return missing("budget item");
+  const actor = await currentActor();
+  if (!actor) return signedOut();
+  if (!hasPermission("manage_budget", actor)) return denied("edit budgets");
+  if (!(await getBudgetItemById(id))) return missing("budget item");
   const result = validateBudgetItemInput(input);
   if (!result.ok) return invalid(result.errors);
-  updateBudgetItem(id, result.value);
-  revalidateWorkspace();
+  await updateBudgetItem(id, result.value);
+  await revalidateWorkspace();
   return ok({ id });
 }
 
 export async function deleteBudgetItemAction(id: string): Promise<ActionResult> {
-  await syncCurrentUserFromSession();
-  if (!hasPermission("manage_budget")) return denied("edit budgets");
-  if (!deleteBudgetItem(id)) return missing("budget item");
-  revalidateWorkspace();
+  const actor = await currentActor();
+  if (!actor) return signedOut();
+  if (!hasPermission("manage_budget", actor)) return denied("edit budgets");
+  if (!(await deleteBudgetItem(id))) return missing("budget item");
+  await revalidateWorkspace();
   return ok(null);
 }

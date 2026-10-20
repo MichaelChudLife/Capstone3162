@@ -1,16 +1,25 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getCurrentUser, getMemberById, setCurrentUserId } from "./data";
+import { getMemberById } from "./data";
 import type { Member } from "./types";
 
 export const SESSION_COOKIE = "cca_session";
 export const SESSION_TTL_SECONDS = 30 * 60; // matches the "expires after 30 minutes of inactivity" copy on /login
 
-const SECRET = process.env.SESSION_SECRET ?? "dev-only-insecure-secret-change-me";
+const DEV_SECRET = "dev-only-insecure-secret-change-me";
+
+function sessionSecret(): string {
+  const secret = process.env.SESSION_SECRET;
+  if (secret && secret.length >= 32) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET must be set to a random value of at least 32 characters in production.");
+  }
+  return DEV_SECRET;
+}
 
 function sign(payload: string): string {
-  return crypto.createHmac("sha256", SECRET).update(payload).digest("base64url");
+  return crypto.createHmac("sha256", sessionSecret()).update(payload).digest("base64url");
 }
 
 /** Signs a fresh session token for this member, valid for SESSION_TTL_SECONDS from now. */
@@ -58,40 +67,22 @@ export async function getSessionMemberId(): Promise<string | null> {
   return token ? verifySessionToken(token) : null;
 }
 
-/**
- * Best-effort sync of the request's logged-in member into the in-memory
- * data layer. Swallows the error `next/headers` throws outside a real
- * request (e.g. unit tests calling server actions directly) so those tests
- * keep driving identity via `updateMemberAccessRole` as before.
- */
-export async function syncCurrentUserFromSession(): Promise<void> {
-  try {
-    const memberId = await getSessionMemberId();
-    if (memberId) setCurrentUserId(memberId);
-  } catch {
-    // No request context available — leave the current identity as-is.
-  }
-}
-
-export async function currentActor(): Promise<Member> {
-  let memberId: string | null = null;
+export async function currentActor(): Promise<Member | null> {
+  let memberId: string | null;
   try {
     memberId = await getSessionMemberId();
   } catch {
-    memberId = null;
+    return null;
   }
-  const member = memberId ? getMemberById(memberId) : undefined;
-  if (!member) return getCurrentUser();
-  setCurrentUserId(member.id);
-  return member;
+  if (!memberId) return null;
+  return (await getMemberById(memberId)) ?? null;
 }
 
 /** For Server Components: resolves the logged-in member or redirects to /login. */
 export async function requireCurrentMember(): Promise<Member> {
   const memberId = await getSessionMemberId();
   if (!memberId) redirect("/login");
-  const member = getMemberById(memberId);
+  const member = await getMemberById(memberId);
   if (!member) redirect("/login?signedout=1");
-  setCurrentUserId(member.id);
   return member;
 }

@@ -13,7 +13,6 @@ import {
   getEventById,
   getEvents,
   getMembers,
-  getMembersByIds,
   getTasksForEvent,
   hasPermission,
 } from "@/lib/data";
@@ -34,17 +33,23 @@ function countdown(iso: string): string {
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireCurrentMember();
-  const event = getEventById(id);
+  const event = await getEventById(id);
   if (!event) notFound();
 
-  const subTasks = getTasksForEvent(event.id);
+  const [subTasks, budgetItems, budgetSummary, members, events] = await Promise.all([
+    getTasksForEvent(event.id),
+    getBudgetItemsForEvent(event.id),
+    getBudgetSummary(event.id),
+    getMembers(),
+    getEvents(),
+  ]);
+  const memberById = new Map(members.map((member) => [member.id, member]));
   const done = subTasks.filter((t) => t.status === "DONE").length;
   const pct = subTasks.length ? Math.round((done / subTasks.length) * 100) : 0;
   const unassigned = subTasks.filter((t) => t.assigneeIds.length === 0 && t.status !== "DONE").length;
   const canManageEvents = hasPermission("manage_events", user);
   const canManageTasks = hasPermission("manage_tasks", user);
   const canManageBudget = hasPermission("manage_budget", user);
-  const budgetItems = getBudgetItemsForEvent(event.id);
   const date = new Date(event.date);
 
   return (
@@ -105,8 +110,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           </div>
           {canManageTasks && (
             <NewTaskButton
-              members={getMembers()}
-              events={getEvents()}
+              members={members}
+              events={events}
               defaultEventId={event.id}
               lockEvent
               label="Add sub-task"
@@ -133,7 +138,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
                 </div>
                 <ul className="ml-2 border-l-2 border-[var(--border)]">
                   {group.map((task) => {
-                    const assignees = getMembersByIds(task.assigneeIds);
+                    const assignees = task.assigneeIds.flatMap((assigneeId) => memberById.get(assigneeId) ?? []);
                     const isDone = task.status === "DONE";
                     return (
                       <li key={task.id}>
@@ -175,7 +180,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         )}
       </section>
 
-      <BudgetSection event={event} items={budgetItems} summary={getBudgetSummary(event.id)} canManage={canManageBudget} />
+      <BudgetSection event={event} items={budgetItems} summary={budgetSummary} canManage={canManageBudget} />
     </AppShell>
   );
 }

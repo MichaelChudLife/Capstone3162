@@ -1,3 +1,5 @@
+import type { Prisma } from "@/generated/prisma/client";
+import { db } from "./db";
 import {
   ROLE_PERMISSIONS,
   type AccessRole,
@@ -18,326 +20,259 @@ import {
   type InviteInput,
 } from "./types";
 import { DUE_SOON_HOURS, reminderKindFor } from "./reminder-rules";
-import { hashPassword, verifyPassword } from "./password";
+import { verifyPassword } from "./password";
 import { summariseBudget, type BudgetSummary } from "./money";
+import { KIND_FROM_DB, KIND_TO_DB, ROLE_FROM_DB, ROLE_TO_DB } from "./db-enums";
 
-// Demo seed data only — every member shares this password so the app can be
-// tried out as any role. Not a pattern to carry into a real deployment.
-const DEMO_PASSWORD = "Committee2026!";
+const HOUR = 3600000;
 
-function hoursOffset(hours: number): string {
-  const d = new Date(Date.now() + hours * 3600000);
-  d.setSeconds(0, 0);
-  return d.toISOString();
+const memberSelect = {
+  id: true,
+  name: true,
+  initials: true,
+  color: true,
+  role: true,
+  accessRole: true,
+  email: true,
+} satisfies Prisma.MemberSelect;
+
+const memberOrder = [{ createdAt: "asc" }, { id: "asc" }] satisfies Prisma.MemberOrderByWithRelationInput[];
+
+const taskInclude = {
+  assignees: { select: { id: true }, orderBy: memberOrder },
+} satisfies Prisma.TaskInclude;
+
+type MemberRow = Prisma.MemberGetPayload<{ select: typeof memberSelect }>;
+type TaskRow = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
+type EventRow = Prisma.EventGetPayload<object>;
+type BudgetRow = Prisma.BudgetItemGetPayload<object>;
+type StatusChangeRow = Prisma.TaskStatusChangeGetPayload<object>;
+type ReminderRow = Prisma.TaskReminderGetPayload<object>;
+type InviteRow = Prisma.InviteGetPayload<object>;
+
+function toMember(row: MemberRow): Member {
+  return {
+    id: row.id,
+    name: row.name,
+    initials: row.initials,
+    color: row.color,
+    role: row.role,
+    accessRole: ROLE_FROM_DB[row.accessRole],
+    email: row.email,
+  };
 }
 
-function dayOffset(days: number, hour = 17, minute = 0): string {
-  const d = new Date();
-  d.setHours(hour, minute, 0, 0);
-  d.setDate(d.getDate() + days);
-  return d.toISOString();
+function toTask(row: TaskRow): Task {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    priority: row.priority,
+    dueDate: row.dueDate?.toISOString() ?? null,
+    assigneeIds: row.assignees.map((a) => a.id),
+    eventId: row.eventId,
+    createdAt: row.createdAt.toISOString(),
+  };
 }
 
-export const members: Member[] = [
-  { id: "m1", name: "Michael Zhang", initials: "MZ", color: "#4f46e5", role: "Tech Lead", accessRole: "IT Director", email: "michael@cca.org.au" },
-  { id: "m2", name: "Yahya Al-Rawi", initials: "YA", color: "#0ea5e9", role: "Backend", accessRole: "Events Director", email: "yahya@cca.org.au" },
-  { id: "m3", name: "Nathanael Khor", initials: "NK", color: "#16a34a", role: "Frontend", accessRole: "Marketing Director", email: "nathanael@cca.org.au" },
-  { id: "m4", name: "YunSoo Jin", initials: "YJ", color: "#db2777", role: "Full-stack", accessRole: "Committee Director", email: "yunsoo@cca.org.au" },
-  { id: "m5", name: "Sener Sethi", initials: "SS", color: "#f59e0b", role: "QA & Docs", accessRole: "Committee Member", email: "sener@cca.org.au" },
-];
-
-const passwordHashes = new Map<string, string>(members.map((member) => [member.id, hashPassword(DEMO_PASSWORD)]));
-
-// The identity of the signed-in member for the current request. Real
-// requests set this from the session cookie (see lib/auth.ts); it defaults
-// to m1 so the existing unit tests — which exercise permission logic
-// directly and have no HTTP session — keep working unchanged.
-export let currentUserId = "m1";
-
-export function setCurrentUserId(id: string): void {
-  currentUserId = id;
+function toEvent(row: EventRow): CcaEvent {
+  return {
+    id: row.id,
+    title: row.title,
+    date: row.date.toISOString(),
+    location: row.location,
+    description: row.description,
+  };
 }
 
-export function getCurrentUser(): Member {
-  return members.find((member) => member.id === currentUserId)!;
+function toBudgetItem(row: BudgetRow): BudgetItem {
+  return {
+    id: row.id,
+    eventId: row.eventId,
+    description: row.description,
+    expectedCents: row.expectedCents,
+    actualCents: row.actualCents,
+    createdAt: row.createdAt.toISOString(),
+  };
 }
 
-export function getMemberByEmail(email: string): Member | undefined {
-  const target = email.trim().toLowerCase();
-  return members.find((member) => member.email.toLowerCase() === target);
+function toStatusChange(row: StatusChangeRow): StatusChange {
+  return {
+    id: row.id,
+    taskId: row.taskId,
+    from: row.fromStatus,
+    to: row.toStatus,
+    actorId: row.actorId,
+    at: row.at.toISOString(),
+  };
 }
 
-export function authenticate(email: string, password: string): Member | undefined {
-  const member = getMemberByEmail(email);
-  const hash = member && passwordHashes.get(member.id);
-  return hash && verifyPassword(password, hash) ? member : undefined;
+function toReminder(row: ReminderRow): TaskReminder {
+  return {
+    id: row.id,
+    taskId: row.taskId,
+    memberId: row.memberId,
+    kind: KIND_FROM_DB[row.kind],
+    dueDate: row.dueDate.toISOString(),
+    firedAt: row.firedAt.toISOString(),
+    readAt: row.readAt?.toISOString() ?? null,
+  };
 }
 
-export function hasPermission(permission: Permission, member = getCurrentUser()): boolean {
+function toInvite(row: InviteRow): Invite {
+  return {
+    id: row.id,
+    email: row.email,
+    accessRole: ROLE_FROM_DB[row.accessRole],
+    position: row.position,
+    tokenHash: row.tokenHash,
+    invitedById: row.invitedById,
+    createdAt: row.createdAt.toISOString(),
+    expiresAt: row.expiresAt.toISOString(),
+    acceptedAt: row.acceptedAt?.toISOString() ?? null,
+    acceptedMemberId: row.acceptedMemberId,
+    revokedAt: row.revokedAt?.toISOString() ?? null,
+  };
+}
+
+function date(value: string | null): Date | null {
+  return value ? new Date(value) : null;
+}
+
+export function hasPermission(permission: Permission, member: Member): boolean {
   return ROLE_PERMISSIONS[member.accessRole].includes(permission);
 }
 
-// Directors with manage_tasks can update any task. Any assignee can move status on their own tasks.
-export function canUpdateTask(task: Task, member = getCurrentUser()): boolean {
+export function canUpdateTask(task: Task, member: Member): boolean {
   if (hasPermission("manage_tasks", member)) return true;
   return task.assigneeIds.includes(member.id);
 }
 
-export function updateMemberAccessRole(memberId: string, accessRole: AccessRole): void {
-  const member = members.find((item) => item.id === memberId);
-  if (member) member.accessRole = accessRole;
+export async function getWorkspaceVersion(): Promise<number> {
+  const workspace = await db().workspace.findUnique({ where: { id: 1 } });
+  return workspace?.version ?? 1;
 }
 
-export const events: CcaEvent[] = [
-  {
-    id: "e1",
-    title: "Industry Networking Night",
-    date: dayOffset(9, 18, 30),
-    location: "Monash LTB Foyer",
-    description: "Flagship semester event connecting members with commerce and tech recruiters.",
-  },
-  {
-    id: "e2",
-    title: "Semester 2 Welcome BBQ",
-    date: dayOffset(3, 12, 0),
-    location: "Lemon Scented Lawns",
-    description: "Kick-off social to onboard new members and introduce the committee.",
-  },
-  {
-    id: "e3",
-    title: "Intro to Quant Finance Workshop",
-    date: dayOffset(16, 13, 0),
-    location: "Woodside Building 3.01",
-    description: "Hands-on workshop run with the Quant Society covering Python for finance.",
-  },
-  {
-    id: "e4",
-    title: "Weekly Committee Meeting",
-    date: dayOffset(1, 18, 0),
-    location: "Zoom",
-    description: "Standing weekly sync to track deliverables and blockers.",
-  },
-];
-
-export const tasks: Task[] = [
-  {
-    id: "t1",
-    title: "Confirm catering headcount",
-    description: "Lock in final numbers with the caterer for the BBQ.",
-    status: "IN_PROGRESS",
-    priority: "HIGH",
-    dueDate: dayOffset(-1),
-    assigneeIds: ["m4"],
-    eventId: "e2",
-    createdAt: dayOffset(-6),
-  },
-  {
-    id: "t2",
-    title: "Design event poster",
-    description: "A3 poster for the Networking Night, on-brand with CCA palette.",
-    status: "IN_PROGRESS",
-    priority: "MEDIUM",
-    dueDate: dayOffset(2),
-    assigneeIds: ["m3", "m4"],
-    eventId: "e1",
-    createdAt: dayOffset(-4),
-  },
-  {
-    id: "t3",
-    title: "Email recruiter partners",
-    description: "Send invitations and confirm attendance from partner firms.",
-    status: "TODO",
-    priority: "HIGH",
-    dueDate: dayOffset(1),
-    assigneeIds: ["m2"],
-    eventId: "e1",
-    createdAt: dayOffset(-3),
-  },
-  {
-    id: "t4",
-    title: "Book Woodside room 3.01",
-    description: "Reserve the workshop room and AV equipment.",
-    status: "TODO",
-    priority: "MEDIUM",
-    dueDate: dayOffset(4),
-    assigneeIds: ["m5"],
-    eventId: "e3",
-    createdAt: dayOffset(-2),
-  },
-  {
-    id: "t5",
-    title: "Draft workshop slide deck",
-    description: "Intro to Quant Finance content, ~20 slides.",
-    status: "TODO",
-    priority: "LOW",
-    dueDate: dayOffset(10),
-    assigneeIds: ["m1"],
-    eventId: "e3",
-    createdAt: dayOffset(-1),
-  },
-  {
-    id: "t6",
-    title: "Prepare committee agenda",
-    description: "Collate updates and blockers for the weekly sync.",
-    status: "TODO",
-    priority: "MEDIUM",
-    dueDate: dayOffset(0, 12, 0),
-    assigneeIds: ["m1"],
-    eventId: "e4",
-    createdAt: dayOffset(-1),
-  },
-  {
-    id: "t7",
-    title: "Set up ticketing form",
-    description: "Create the RSVP and ticketing flow for Networking Night.",
-    status: "TODO",
-    priority: "HIGH",
-    dueDate: dayOffset(3),
-    assigneeIds: ["m4"],
-    eventId: "e1",
-    createdAt: dayOffset(-2),
-  },
-  {
-    id: "t8",
-    title: "Post BBQ announcement",
-    description: "Instagram and Discord announcement with sign-up link.",
-    status: "DONE",
-    priority: "MEDIUM",
-    dueDate: dayOffset(-4),
-    assigneeIds: ["m3"],
-    eventId: "e2",
-    createdAt: dayOffset(-8),
-  },
-  {
-    id: "t9",
-    title: "Reconcile sponsorship budget",
-    description: "Match sponsor commitments against the semester budget sheet.",
-    status: "DONE",
-    priority: "LOW",
-    dueDate: dayOffset(-6),
-    assigneeIds: ["m5"],
-    eventId: null,
-    createdAt: dayOffset(-10),
-  },
-  {
-    id: "t10",
-    title: "Order printed name tags",
-    description: "Name tags for committee and volunteers at the BBQ.",
-    status: "TODO",
-    priority: "LOW",
-    dueDate: dayOffset(2, 12, 0),
-    assigneeIds: ["m2"],
-    eventId: "e2",
-    createdAt: dayOffset(-1),
-  },
-  {
-    id: "t11",
-    title: "Finalise run sheet",
-    description: "Minute-by-minute run sheet for Networking Night.",
-    status: "IN_PROGRESS",
-    priority: "HIGH",
-    dueDate: dayOffset(6),
-    assigneeIds: ["m1", "m2"],
-    eventId: "e1",
-    createdAt: dayOffset(-2),
-  },
-  {
-    id: "t12",
-    title: "Finalise sponsor deck",
-    description: "Pull final logos and tiers into the sponsor deck for Networking Night.",
-    status: "IN_PROGRESS",
-    priority: "HIGH",
-    dueDate: dayOffset(-1),
-    assigneeIds: ["m1"],
-    eventId: "e1",
-    createdAt: dayOffset(-7),
-  },
-  {
-    id: "t13",
-    title: "Confirm guest speaker availability",
-    description: "Lock in the keynote speaker and confirm their slot.",
-    status: "DONE",
-    priority: "LOW",
-    dueDate: dayOffset(-1),
-    assigneeIds: ["m1"],
-    eventId: "e1",
-    createdAt: dayOffset(-9),
-  },
-  {
-    id: "t14",
-    title: "Recruit event photographers",
-    description: "Find two volunteers to cover photos for socials on the night.",
-    status: "TODO",
-    priority: "MEDIUM",
-    dueDate: dayOffset(5),
-    assigneeIds: [],
-    eventId: "e1",
-    createdAt: dayOffset(-1),
-  },
-  {
-    id: "t15",
-    title: "Submit BBQ food safety checklist",
-    description: "Complete the campus food safety form and upload it to the events portal.",
-    status: "IN_PROGRESS",
-    priority: "HIGH",
-    dueDate: hoursOffset(20),
-    assigneeIds: ["m5"],
-    eventId: "e2",
-    createdAt: dayOffset(-3),
-  },
-  {
-    id: "t16",
-    title: "Send volunteer roster",
-    description: "Share the BBQ volunteer shifts with the committee group chat.",
-    status: "TODO",
-    priority: "MEDIUM",
-    dueDate: hoursOffset(-3),
-    assigneeIds: ["m5", "m4"],
-    eventId: "e2",
-    createdAt: dayOffset(-4),
-  },
-];
-
-export const statusChanges: StatusChange[] = [
-  { id: "s1", taskId: "t1", from: "TODO", to: "IN_PROGRESS", actorId: "m4", at: dayOffset(-2, 10, 15) },
-  { id: "s2", taskId: "t2", from: "TODO", to: "IN_PROGRESS", actorId: "m3", at: dayOffset(-2, 14, 40) },
-  { id: "s3", taskId: "t8", from: "TODO", to: "IN_PROGRESS", actorId: "m3", at: dayOffset(-6, 9, 5) },
-  { id: "s4", taskId: "t8", from: "IN_PROGRESS", to: "DONE", actorId: "m3", at: dayOffset(-5, 16, 30) },
-  { id: "s5", taskId: "t15", from: "TODO", to: "IN_PROGRESS", actorId: "m5", at: dayOffset(-1, 11, 20) },
-];
-
-export const taskReminders: TaskReminder[] = [];
-
-export const invites: Invite[] = [];
-
-// Amounts are integer cents (AUD). Items with a null `actualCents` have no
-// spend recorded yet.
-export const budgetItems: BudgetItem[] = [
-  { id: "b1", eventId: "e1", description: "Venue hire — LTB Foyer", expectedCents: 120000, actualCents: 120000, createdAt: dayOffset(-12) },
-  { id: "b2", eventId: "e1", description: "Catering — canapés and drinks", expectedCents: 280000, actualCents: 312550, createdAt: dayOffset(-11) },
-  { id: "b3", eventId: "e1", description: "Printing — posters and name tags", expectedCents: 45000, actualCents: 38000, createdAt: dayOffset(-8) },
-  { id: "b4", eventId: "e1", description: "Photographer", expectedCents: 60000, actualCents: null, createdAt: dayOffset(-5) },
-  { id: "b5", eventId: "e2", description: "BBQ food and drinks", expectedCents: 90000, actualCents: 84520, createdAt: dayOffset(-7) },
-  { id: "b6", eventId: "e2", description: "Equipment hire", expectedCents: 25000, actualCents: null, createdAt: dayOffset(-6) },
-];
-
-let taskSeq = tasks.length;
-let statusSeq = statusChanges.length;
-let reminderSeq = 0;
-let inviteSeq = 0;
-let memberSeq = members.length;
-const live = ((globalThis as { __ccaHubLive?: { version: number } }).__ccaHubLive ??= { version: 1 });
-
-export function getWorkspaceVersion(): number {
-  return live.version;
+export async function bumpWorkspaceVersion(): Promise<number> {
+  const workspace = await db().workspace.upsert({
+    where: { id: 1 },
+    update: { version: { increment: 1 } },
+    create: { id: 1, version: 2 },
+  });
+  return workspace.version;
 }
 
-export function bumpWorkspaceVersion(): number {
-  live.version += 1;
-  return live.version;
+export async function getMembers(): Promise<Member[]> {
+  const rows = await db().member.findMany({ select: memberSelect, orderBy: memberOrder });
+  return rows.map(toMember);
 }
-let eventSeq = events.length;
-let budgetSeq = budgetItems.length;
+
+export async function getMemberById(id: string | null): Promise<Member | undefined> {
+  if (!id) return undefined;
+  const row = await db().member.findUnique({ where: { id }, select: memberSelect });
+  return row ? toMember(row) : undefined;
+}
+
+export async function getMembersByIds(ids: string[]): Promise<Member[]> {
+  if (ids.length === 0) return [];
+  const rows = await db().member.findMany({ where: { id: { in: ids } }, select: memberSelect });
+  const byId = new Map(rows.map((row) => [row.id, toMember(row)]));
+  return ids.map((id) => byId.get(id)).filter((m): m is Member => Boolean(m));
+}
+
+export async function getMemberByEmail(email: string): Promise<Member | undefined> {
+  const row = await db().member.findFirst({
+    where: { email: { equals: email.trim(), mode: "insensitive" } },
+    select: memberSelect,
+  });
+  return row ? toMember(row) : undefined;
+}
+
+export async function authenticate(email: string, password: string): Promise<Member | undefined> {
+  const row = await db().member.findFirst({
+    where: { email: { equals: email.trim(), mode: "insensitive" } },
+    select: { ...memberSelect, passwordHash: true },
+  });
+  if (!row || !verifyPassword(password, row.passwordHash)) return undefined;
+  return toMember(row);
+}
+
+export async function updateMemberAccessRole(memberId: string, accessRole: AccessRole): Promise<void> {
+  await db().member.updateMany({ where: { id: memberId }, data: { accessRole: ROLE_TO_DB[accessRole] } });
+}
+
+export async function getEvents(): Promise<CcaEvent[]> {
+  const rows = await db().event.findMany({ orderBy: [{ date: "asc" }, { createdAt: "asc" }] });
+  return rows.map(toEvent);
+}
+
+export async function getEventById(id: string | null): Promise<CcaEvent | undefined> {
+  if (!id) return undefined;
+  const row = await db().event.findUnique({ where: { id } });
+  return row ? toEvent(row) : undefined;
+}
+
+export async function createEvent(input: EventInput): Promise<CcaEvent> {
+  const row = await db().event.create({
+    data: { title: input.title, description: input.description, date: new Date(input.date), location: input.location },
+  });
+  return toEvent(row);
+}
+
+export async function updateEvent(id: string, input: EventInput): Promise<CcaEvent | undefined> {
+  const { count } = await db().event.updateMany({
+    where: { id },
+    data: { title: input.title, description: input.description, date: new Date(input.date), location: input.location },
+  });
+  return count ? getEventById(id) : undefined;
+}
+
+export async function deleteEvent(id: string): Promise<{ event: CcaEvent; removedTaskIds: string[] } | undefined> {
+  return db().$transaction(async (tx) => {
+    const event = await tx.event.findUnique({ where: { id } });
+    if (!event) return undefined;
+    const removed = await tx.task.findMany({ where: { eventId: id }, select: { id: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+    await tx.event.delete({ where: { id } });
+    return { event: toEvent(event), removedTaskIds: removed.map((t) => t.id) };
+  });
+}
+
+export async function getBudgetItemsForEvent(eventId: string): Promise<BudgetItem[]> {
+  const rows = await db().budgetItem.findMany({ where: { eventId }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  return rows.map(toBudgetItem);
+}
+
+export async function getBudgetItemById(id: string): Promise<BudgetItem | undefined> {
+  const row = await db().budgetItem.findUnique({ where: { id } });
+  return row ? toBudgetItem(row) : undefined;
+}
+
+export async function getBudgetSummary(eventId: string): Promise<BudgetSummary> {
+  return summariseBudget(await getBudgetItemsForEvent(eventId));
+}
+
+export async function createBudgetItem(eventId: string, input: BudgetItemInput): Promise<BudgetItem> {
+  const row = await db().budgetItem.create({
+    data: { eventId, description: input.description, expectedCents: input.expectedCents, actualCents: input.actualCents },
+  });
+  return toBudgetItem(row);
+}
+
+export async function updateBudgetItem(id: string, input: BudgetItemInput): Promise<BudgetItem | undefined> {
+  const { count } = await db().budgetItem.updateMany({
+    where: { id },
+    data: { description: input.description, expectedCents: input.expectedCents, actualCents: input.actualCents },
+  });
+  return count ? getBudgetItemById(id) : undefined;
+}
+
+export async function deleteBudgetItem(id: string): Promise<BudgetItem | undefined> {
+  const existing = await getBudgetItemById(id);
+  if (!existing) return undefined;
+  const { count } = await db().budgetItem.deleteMany({ where: { id } });
+  return count ? existing : undefined;
+}
 
 const PRIORITY_RANK: Record<Priority, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 
@@ -346,177 +281,87 @@ export function compareByDeadlineThenPriority(a: Task, b: Task): number {
   return due !== 0 ? due : PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
 }
 
-export function getMembers(): Member[] {
-  return members;
+const taskOrder = [{ createdAt: "asc" }, { id: "asc" }] satisfies Prisma.TaskOrderByWithRelationInput[];
+
+export async function getTasks(): Promise<Task[]> {
+  const rows = await db().task.findMany({ include: taskInclude, orderBy: taskOrder });
+  return rows.map(toTask);
 }
 
-export function getMemberById(id: string | null): Member | undefined {
-  if (!id) return undefined;
-  return members.find((m) => m.id === id);
+export async function getTaskById(id: string): Promise<Task | undefined> {
+  const row = await db().task.findUnique({ where: { id }, include: taskInclude });
+  return row ? toTask(row) : undefined;
 }
 
-export function getMembersByIds(ids: string[]): Member[] {
-  return ids.map((id) => members.find((m) => m.id === id)).filter((m): m is Member => Boolean(m));
+export async function getTasksForEvent(eventId: string): Promise<Task[]> {
+  const rows = await db().task.findMany({ where: { eventId }, include: taskInclude, orderBy: taskOrder });
+  return rows.map(toTask).sort(compareByDeadlineThenPriority);
 }
 
-export function getEvents(): CcaEvent[] {
-  return [...events].sort((a, b) => a.date.localeCompare(b.date));
+export async function getTasksByStatus(status: TaskStatus): Promise<Task[]> {
+  const rows = await db().task.findMany({
+    where: { status },
+    include: taskInclude,
+    orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, ...taskOrder],
+  });
+  return rows.map(toTask);
 }
 
-export function getEventById(id: string | null): CcaEvent | undefined {
-  if (!id) return undefined;
-  return events.find((e) => e.id === id);
+export async function createTask(input: TaskInput): Promise<Task> {
+  const row = await db().task.create({
+    data: {
+      title: input.title,
+      description: input.description,
+      status: input.status,
+      priority: input.priority,
+      dueDate: date(input.dueDate),
+      eventId: input.eventId,
+      assignees: { connect: input.assigneeIds.map((id) => ({ id })) },
+    },
+    include: taskInclude,
+  });
+  return toTask(row);
 }
 
-export function createEvent(input: EventInput): CcaEvent {
-  eventSeq += 1;
-  const event: CcaEvent = {
-    id: `e${eventSeq}`,
-    title: input.title,
-    description: input.description,
-    date: input.date,
-    location: input.location,
-  };
-  events.push(event);
-  return event;
-}
-
-export function updateEvent(id: string, input: EventInput): CcaEvent | undefined {
-  const event = events.find((e) => e.id === id);
-  if (!event) return undefined;
-  Object.assign(event, input);
-  return event;
-}
-
-export function deleteEvent(id: string): { event: CcaEvent; removedTaskIds: string[] } | undefined {
-  const index = events.findIndex((e) => e.id === id);
-  if (index === -1) return undefined;
-  const [event] = events.splice(index, 1);
-  for (let i = budgetItems.length - 1; i >= 0; i -= 1) {
-    if (budgetItems[i].eventId === id) budgetItems.splice(i, 1);
-  }
-  const removedTaskIds: string[] = [];
-  for (let i = tasks.length - 1; i >= 0; i -= 1) {
-    if (tasks[i].eventId === id) {
-      removedTaskIds.push(tasks[i].id);
-      tasks.splice(i, 1);
+export async function updateTask(id: string, input: TaskInput, actorId: string): Promise<Task | undefined> {
+  return db().$transaction(async (tx) => {
+    const existing = await tx.task.findUnique({ where: { id }, select: { status: true } });
+    if (!existing) return undefined;
+    const row = await tx.task.update({
+      where: { id },
+      data: {
+        title: input.title,
+        description: input.description,
+        status: input.status,
+        priority: input.priority,
+        dueDate: date(input.dueDate),
+        eventId: input.eventId,
+        assignees: { set: input.assigneeIds.map((assigneeId) => ({ id: assigneeId })) },
+      },
+      include: taskInclude,
+    });
+    if (existing.status !== row.status) {
+      await tx.taskStatusChange.create({ data: { taskId: id, fromStatus: existing.status, toStatus: row.status, actorId } });
     }
-  }
-  removeWhere(statusChanges, (c) => removedTaskIds.includes(c.taskId));
-  removeWhere(taskReminders, (r) => removedTaskIds.includes(r.taskId));
-  return { event, removedTaskIds: removedTaskIds.reverse() };
+    return toTask(row);
+  });
 }
 
-export function getBudgetItemsForEvent(eventId: string): BudgetItem[] {
-  return budgetItems.filter((b) => b.eventId === eventId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+export async function setTaskStatus(id: string, status: TaskStatus, actorId: string): Promise<StatusChange | null> {
+  return db().$transaction(async (tx) => {
+    const task = await tx.task.findUnique({ where: { id }, select: { status: true } });
+    if (!task || task.status === status) return null;
+    await tx.task.update({ where: { id }, data: { status } });
+    const change = await tx.taskStatusChange.create({
+      data: { taskId: id, fromStatus: task.status, toStatus: status, actorId },
+    });
+    return toStatusChange(change);
+  });
 }
 
-export function getBudgetItemById(id: string): BudgetItem | undefined {
-  return budgetItems.find((b) => b.id === id);
-}
-
-export function getBudgetSummary(eventId: string): BudgetSummary {
-  return summariseBudget(getBudgetItemsForEvent(eventId));
-}
-
-export function createBudgetItem(eventId: string, input: BudgetItemInput): BudgetItem {
-  budgetSeq += 1;
-  const item: BudgetItem = {
-    id: `b${budgetSeq}`,
-    eventId,
-    description: input.description,
-    expectedCents: input.expectedCents,
-    actualCents: input.actualCents,
-    createdAt: new Date().toISOString(),
-  };
-  budgetItems.push(item);
-  return item;
-}
-
-export function updateBudgetItem(id: string, input: BudgetItemInput): BudgetItem | undefined {
-  const item = budgetItems.find((b) => b.id === id);
-  if (!item) return undefined;
-  Object.assign(item, input);
-  return item;
-}
-
-export function deleteBudgetItem(id: string): BudgetItem | undefined {
-  const index = budgetItems.findIndex((b) => b.id === id);
-  if (index === -1) return undefined;
-  return budgetItems.splice(index, 1)[0];
-}
-
-function removeWhere<T>(list: T[], predicate: (item: T) => boolean): void {
-  for (let i = list.length - 1; i >= 0; i -= 1) {
-    if (predicate(list[i])) list.splice(i, 1);
-  }
-}
-
-export function getTasks(): Task[] {
-  return tasks;
-}
-
-export function getTaskById(id: string): Task | undefined {
-  return tasks.find((t) => t.id === id);
-}
-
-export function getTasksForEvent(eventId: string): Task[] {
-  return tasks.filter((t) => t.eventId === eventId).sort(compareByDeadlineThenPriority);
-}
-
-export function getTasksByStatus(status: TaskStatus): Task[] {
-  return tasks
-    .filter((t) => t.status === status)
-    .sort((a, b) => (a.dueDate ?? "9").localeCompare(b.dueDate ?? "9"));
-}
-
-export function createTask(input: TaskInput): Task {
-  taskSeq += 1;
-  const task: Task = {
-    id: `t${taskSeq}`,
-    title: input.title,
-    description: input.description,
-    status: input.status,
-    priority: input.priority,
-    dueDate: input.dueDate,
-    assigneeIds: [...input.assigneeIds],
-    eventId: input.eventId,
-    createdAt: new Date().toISOString(),
-  };
-  tasks.push(task);
-  return task;
-}
-
-export function updateTask(id: string, input: TaskInput, actorId = currentUserId): Task | undefined {
-  const task = tasks.find((t) => t.id === id);
-  if (!task) return undefined;
-  const previous = task.status;
-  Object.assign(task, { ...input, assigneeIds: [...input.assigneeIds] });
-  if (previous !== task.status) recordStatusChange(task.id, previous, task.status, actorId);
-  return task;
-}
-
-function recordStatusChange(taskId: string, from: TaskStatus, to: TaskStatus, actorId: string): StatusChange {
-  statusSeq += 1;
-  const change: StatusChange = { id: `s${statusSeq}`, taskId, from, to, actorId, at: new Date().toISOString() };
-  statusChanges.push(change);
-  return change;
-}
-
-export function setTaskStatus(id: string, status: TaskStatus, actorId = currentUserId): StatusChange | null {
-  const task = tasks.find((t) => t.id === id);
-  if (!task || task.status === status) return null;
-  const from = task.status;
-  task.status = status;
-  return recordStatusChange(id, from, status, actorId);
-}
-
-export function getStatusHistory(taskId: string): StatusChange[] {
-  return statusChanges
-    .filter((c) => c.taskId === taskId)
-    .map((c, index) => ({ c, index }))
-    .sort((a, b) => b.c.at.localeCompare(a.c.at) || b.index - a.index)
-    .map(({ c }) => c);
+export async function getStatusHistory(taskId: string): Promise<StatusChange[]> {
+  const rows = await db().taskStatusChange.findMany({ where: { taskId }, orderBy: [{ at: "desc" }, { seq: "desc" }] });
+  return rows.map(toStatusChange);
 }
 
 export interface Reminder {
@@ -526,51 +371,60 @@ export interface Reminder {
 
 const KIND_RANK: Record<ReminderKind, number> = { overdue: 0, due_soon: 1 };
 
-export function getReminders(member = getCurrentUser(), now = new Date()): Reminder[] {
-  const scoped = hasPermission("manage_tasks", member)
-    ? tasks
-    : tasks.filter((t) => t.assigneeIds.includes(member.id));
+function reminderHorizon(now: Date): Date {
+  return new Date(now.getTime() + DUE_SOON_HOURS * HOUR);
+}
+
+export async function getReminders(member: Member, now = new Date()): Promise<Reminder[]> {
+  const rows = await db().task.findMany({
+    where: {
+      status: { not: "DONE" },
+      dueDate: { not: null, lte: reminderHorizon(now) },
+      ...(hasPermission("manage_tasks", member) ? {} : { assignees: { some: { id: member.id } } }),
+    },
+    include: taskInclude,
+    orderBy: taskOrder,
+  });
   const items: Reminder[] = [];
-  for (const task of scoped) {
+  for (const task of rows.map(toTask)) {
     const kind = reminderKindFor(task, now);
     if (kind) items.push({ task, kind });
   }
-  return items.sort((a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind] || (a.task.dueDate ?? "").localeCompare(b.task.dueDate ?? ""));
+  return items.sort(
+    (a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind] || (a.task.dueDate ?? "").localeCompare(b.task.dueDate ?? ""),
+  );
 }
 
-export function syncReminders(now = new Date()): number {
-  let fired = 0;
-  for (const task of tasks) {
-    const kind = reminderKindFor(task, now);
-    if (!kind || !task.dueDate) continue;
-    for (const memberId of task.assigneeIds) {
-      const exists = taskReminders.some(
-        (r) => r.taskId === task.id && r.memberId === memberId && r.kind === kind && r.dueDate === task.dueDate,
-      );
-      if (exists) continue;
-      reminderSeq += 1;
-      taskReminders.push({
-        id: `r${reminderSeq}`,
-        taskId: task.id,
-        memberId,
-        kind,
-        dueDate: task.dueDate,
-        firedAt: now.toISOString(),
-        readAt: null,
-      });
-      fired += 1;
+export async function syncReminders(now = new Date()): Promise<number> {
+  const rows = await db().task.findMany({
+    where: { status: { not: "DONE" }, dueDate: { not: null, lte: reminderHorizon(now) } },
+    include: taskInclude,
+    orderBy: taskOrder,
+  });
+  const data: Prisma.TaskReminderCreateManyInput[] = [];
+  for (const row of rows) {
+    const kind = reminderKindFor(toTask(row), now);
+    if (!kind || !row.dueDate) continue;
+    for (const { id: memberId } of row.assignees) {
+      data.push({ taskId: row.id, memberId, kind: KIND_TO_DB[kind], dueDate: row.dueDate, firedAt: now });
     }
   }
-  if (fired > 0) bumpWorkspaceVersion();
-  return fired;
+  if (data.length === 0) return 0;
+  const { count } = await db().taskReminder.createMany({ data, skipDuplicates: true });
+  if (count > 0) await bumpWorkspaceVersion();
+  return count;
 }
 
-export function getNextReminderAt(now = new Date()): string | null {
+export async function getNextReminderAt(now = new Date()): Promise<string | null> {
+  const rows = await db().task.findMany({
+    where: { status: { not: "DONE" }, dueDate: { gt: now }, assignees: { some: {} } },
+    select: { dueDate: true },
+  });
   let next: number | null = null;
-  for (const task of tasks) {
-    if (task.status === "DONE" || !task.dueDate || task.assigneeIds.length === 0) continue;
-    const due = new Date(task.dueDate).getTime();
-    for (const fireAt of [due - DUE_SOON_HOURS * 3600000, due]) {
+  for (const { dueDate } of rows) {
+    if (!dueDate) continue;
+    const due = dueDate.getTime();
+    for (const fireAt of [due - DUE_SOON_HOURS * HOUR, due]) {
       if (fireAt > now.getTime() && (next === null || fireAt < next)) next = fireAt;
     }
   }
@@ -582,15 +436,16 @@ export interface MemberReminder {
   task: Task;
 }
 
-export function getRemindersForMember(memberId: string, now = new Date()): MemberReminder[] {
-  syncReminders(now);
-  const active: MemberReminder[] = [];
-  for (const reminder of taskReminders) {
-    if (reminder.memberId !== memberId) continue;
-    const task = tasks.find((t) => t.id === reminder.taskId);
-    if (!task || task.status === "DONE" || task.dueDate !== reminder.dueDate || !task.assigneeIds.includes(memberId)) continue;
-    active.push({ reminder, task });
-  }
+export async function getRemindersForMember(memberId: string, now = new Date()): Promise<MemberReminder[]> {
+  await syncReminders(now);
+  const rows = await db().taskReminder.findMany({
+    where: { memberId, task: { status: { not: "DONE" }, assignees: { some: { id: memberId } } } },
+    include: { task: { include: taskInclude } },
+    orderBy: [{ firedAt: "asc" }, { dueDate: "asc" }, { taskId: "asc" }],
+  });
+  const active: MemberReminder[] = rows
+    .filter((row) => row.task.dueDate?.getTime() === row.dueDate.getTime())
+    .map((row) => ({ reminder: toReminder(row), task: toTask(row.task) }));
   const overdue = new Set(active.filter((a) => a.reminder.kind === "overdue").map((a) => a.task.id));
   return active
     .filter((a) => !(a.reminder.kind === "due_soon" && overdue.has(a.task.id)))
@@ -602,20 +457,19 @@ export function getRemindersForMember(memberId: string, now = new Date()): Membe
     );
 }
 
-export function markReminderRead(id: string, memberId: string, now = new Date()): boolean {
-  const reminder = taskReminders.find((r) => r.id === id && r.memberId === memberId);
+export async function markReminderRead(id: string, memberId: string, now = new Date()): Promise<boolean> {
+  const reminder = await db().taskReminder.findFirst({ where: { id, memberId }, select: { readAt: true } });
   if (!reminder) return false;
-  reminder.readAt ??= now.toISOString();
+  if (!reminder.readAt) await db().taskReminder.update({ where: { id }, data: { readAt: now } });
   return true;
 }
 
-export function markAllRemindersRead(memberId: string, now = new Date()): number {
-  let count = 0;
-  for (const { reminder } of getRemindersForMember(memberId, now)) {
-    if (reminder.readAt) continue;
-    reminder.readAt = now.toISOString();
-    count += 1;
-  }
+export async function markAllRemindersRead(memberId: string, now = new Date()): Promise<number> {
+  const unread = (await getRemindersForMember(memberId, now))
+    .filter(({ reminder }) => !reminder.readAt)
+    .map(({ reminder }) => reminder.id);
+  if (unread.length === 0) return 0;
+  const { count } = await db().taskReminder.updateMany({ where: { id: { in: unread }, readAt: null }, data: { readAt: now } });
   return count;
 }
 
@@ -630,56 +484,57 @@ export function inviteState(invite: Invite, now = new Date()): InviteState {
   return "pending";
 }
 
-function inviteExpiry(now: Date): string {
-  return new Date(now.getTime() + INVITE_TTL_DAYS * 86400000).toISOString();
+function inviteExpiry(now: Date): Date {
+  return new Date(now.getTime() + INVITE_TTL_DAYS * 86400000);
 }
 
-export function getOpenInvites(): Invite[] {
-  return invites
-    .filter((i) => !i.acceptedAt && !i.revokedAt)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+export async function getOpenInvites(): Promise<Invite[]> {
+  const rows = await db().invite.findMany({
+    where: { acceptedAt: null, revokedAt: null },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+  return rows.map(toInvite);
 }
 
-export function getInviteById(id: string): Invite | undefined {
-  return invites.find((i) => i.id === id);
+export async function getInviteById(id: string): Promise<Invite | undefined> {
+  const row = await db().invite.findUnique({ where: { id } });
+  return row ? toInvite(row) : undefined;
 }
 
-export function findInviteByTokenHash(tokenHash: string): Invite | undefined {
-  return invites.find((i) => i.tokenHash === tokenHash);
+export async function findInviteByTokenHash(tokenHash: string): Promise<Invite | undefined> {
+  const row = await db().invite.findUnique({ where: { tokenHash } });
+  return row ? toInvite(row) : undefined;
 }
 
-export function createInvite(input: InviteInput, tokenHash: string, invitedById: string, now = new Date()): Invite {
-  inviteSeq += 1;
-  const invite: Invite = {
-    id: `i${inviteSeq}`,
-    email: input.email,
-    accessRole: input.accessRole,
-    position: input.position,
-    tokenHash,
-    invitedById,
-    createdAt: now.toISOString(),
-    expiresAt: inviteExpiry(now),
-    acceptedAt: null,
-    acceptedMemberId: null,
-    revokedAt: null,
-  };
-  invites.push(invite);
-  return invite;
+export async function createInvite(input: InviteInput, tokenHash: string, invitedById: string, now = new Date()): Promise<Invite> {
+  const row = await db().invite.create({
+    data: {
+      email: input.email,
+      accessRole: ROLE_TO_DB[input.accessRole],
+      position: input.position,
+      tokenHash,
+      invitedById,
+      createdAt: now,
+      expiresAt: inviteExpiry(now),
+    },
+  });
+  return toInvite(row);
 }
 
-export function renewInvite(id: string, tokenHash: string, now = new Date()): Invite | undefined {
-  const invite = invites.find((i) => i.id === id);
-  if (!invite || invite.acceptedAt || invite.revokedAt) return undefined;
-  invite.tokenHash = tokenHash;
-  invite.expiresAt = inviteExpiry(now);
-  return invite;
+export async function renewInvite(id: string, tokenHash: string, now = new Date()): Promise<Invite | undefined> {
+  const { count } = await db().invite.updateMany({
+    where: { id, acceptedAt: null, revokedAt: null },
+    data: { tokenHash, expiresAt: inviteExpiry(now) },
+  });
+  return count ? getInviteById(id) : undefined;
 }
 
-export function revokeInvite(id: string, now = new Date()): Invite | undefined {
-  const invite = invites.find((i) => i.id === id);
-  if (!invite || invite.acceptedAt || invite.revokedAt) return undefined;
-  invite.revokedAt = now.toISOString();
-  return invite;
+export async function revokeInvite(id: string, now = new Date()): Promise<Invite | undefined> {
+  const { count } = await db().invite.updateMany({
+    where: { id, acceptedAt: null, revokedAt: null },
+    data: { revokedAt: now },
+  });
+  return count ? getInviteById(id) : undefined;
 }
 
 const NEW_MEMBER_COLORS = ["#0891b2", "#7c3aed", "#ea580c", "#65a30d", "#be123c", "#0d9488"];
@@ -691,28 +546,40 @@ function initialsFor(name: string): string {
   return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
 }
 
-export function acceptInvite(
+export async function acceptInvite(
   inviteId: string,
   profile: { name: string; passwordHash: string },
   now = new Date(),
-): Member | undefined {
-  const invite = invites.find((i) => i.id === inviteId);
-  if (!invite || inviteState(invite, now) !== "pending" || getMemberByEmail(invite.email)) return undefined;
-  memberSeq += 1;
-  const member: Member = {
-    id: `m${memberSeq}`,
-    name: profile.name,
-    initials: initialsFor(profile.name),
-    color: NEW_MEMBER_COLORS[(memberSeq - 1) % NEW_MEMBER_COLORS.length],
-    role: invite.position || "Committee member",
-    accessRole: invite.accessRole,
-    email: invite.email,
-  };
-  members.push(member);
-  passwordHashes.set(member.id, profile.passwordHash);
-  invite.acceptedAt = now.toISOString();
-  invite.acceptedMemberId = member.id;
-  bumpWorkspaceVersion();
+): Promise<Member | undefined> {
+  const member = await db().$transaction(async (tx) => {
+    const row = await tx.invite.findUnique({ where: { id: inviteId } });
+    if (!row || inviteState(toInvite(row), now) !== "pending") return undefined;
+    const taken = await tx.member.findFirst({
+      where: { email: { equals: row.email, mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (taken) return undefined;
+    const memberCount = await tx.member.count();
+    const created = await tx.member.create({
+      data: {
+        name: profile.name,
+        initials: initialsFor(profile.name),
+        color: NEW_MEMBER_COLORS[memberCount % NEW_MEMBER_COLORS.length],
+        role: row.position || "Committee member",
+        accessRole: row.accessRole,
+        email: row.email,
+        passwordHash: profile.passwordHash,
+      },
+      select: memberSelect,
+    });
+    const { count } = await tx.invite.updateMany({
+      where: { id: inviteId, acceptedAt: null, revokedAt: null },
+      data: { acceptedAt: now, acceptedMemberId: created.id },
+    });
+    if (count !== 1) throw new Error("Invite was used concurrently.");
+    return toMember(created);
+  });
+  if (member) await bumpWorkspaceVersion();
   return member;
 }
 
@@ -726,8 +593,11 @@ export interface DashboardStats {
   completionRate: number;
 }
 
-export function getDashboardStats(memberId?: string): DashboardStats {
-  const scope = memberId ? tasks.filter((t) => t.assigneeIds.includes(memberId)) : tasks;
+export async function getDashboardStats(memberId?: string): Promise<DashboardStats> {
+  const scope = await db().task.findMany({
+    where: memberId ? { assignees: { some: { id: memberId } } } : {},
+    select: { status: true, dueDate: true },
+  });
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   let open = 0, inProgress = 0, overdue = 0, dueThisWeek = 0, done = 0;
@@ -736,7 +606,7 @@ export function getDashboardStats(memberId?: string): DashboardStats {
     open += 1;
     if (task.status === "IN_PROGRESS") inProgress += 1;
     if (task.dueDate) {
-      const due = new Date(task.dueDate);
+      const due = task.dueDate;
       const startOfDue = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
       const daysUntil = Math.round((startOfDue - startOfToday) / 86400000);
       if (daysUntil < 0) overdue += 1;

@@ -11,7 +11,7 @@ beforeEach(async () => {
 async function createOk(overrides: Parameters<typeof taskInput>[0] = {}) {
   const result = await ws.tasks.createTaskAction(taskInput(overrides));
   if (!result.ok) throw new Error(result.message);
-  return ws.data.getTaskById(result.data.id)!;
+  return (await ws.data.getTaskById(result.data.id))!;
 }
 
 describe("TC-003 · F_REQ-1.3 Task assigned to one or more members", () => {
@@ -19,7 +19,7 @@ describe("TC-003 · F_REQ-1.3 Task assigned to one or more members", () => {
     const task = await createOk({ assigneeIds: ["m2", "m3", "m5"] });
 
     expect(task.assigneeIds).toEqual(["m2", "m3", "m5"]);
-    expect(ws.data.getMembersByIds(task.assigneeIds).map((m) => m.name)).toEqual([
+    expect((await ws.data.getMembersByIds(task.assigneeIds)).map((m) => m.name)).toEqual([
       "Yahya Al-Rawi",
       "Nathanael Khor",
       "Sener Sethi",
@@ -51,7 +51,7 @@ describe("TC-003 · F_REQ-1.3 Task assigned to one or more members", () => {
     const result = await ws.tasks.updateTaskAction(task.id, taskInput({ assigneeIds: ["m1", "m4"] }));
 
     expect(result.ok).toBe(true);
-    expect(ws.data.getTaskById(task.id)?.assigneeIds).toEqual(["m1", "m4"]);
+    expect((await ws.data.getTaskById(task.id))?.assigneeIds).toEqual(["m1", "m4"]);
   });
 });
 
@@ -64,13 +64,13 @@ describe("TC-004 · F_REQ-1.4 Description, deadline and priority per task", () =
   });
 
   it("rejects a deadline in the past", async () => {
-    const before = ws.data.getTasks().length;
+    const before = (await ws.data.getTasks()).length;
     const result = await ws.tasks.createTaskAction(taskInput({ dueDate: hoursFromNow(-1) }));
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors?.dueDate).toBe("Deadline cannot be in the past.");
-    expect(ws.data.getTasks()).toHaveLength(before);
+    expect(await ws.data.getTasks()).toHaveLength(before);
   });
 
   it("permits a task with no deadline", async () => {
@@ -80,7 +80,7 @@ describe("TC-004 · F_REQ-1.4 Description, deadline and priority per task", () =
   });
 
   it("lets an overdue task be edited if its deadline is left unchanged", async () => {
-    const overdue = ws.data.getTaskById("t1")!;
+    const overdue = (await ws.data.getTaskById("t1"))!;
     expect(new Date(overdue.dueDate!).getTime()).toBeLessThan(Date.now());
 
     const result = await ws.tasks.updateTaskAction(
@@ -89,7 +89,7 @@ describe("TC-004 · F_REQ-1.4 Description, deadline and priority per task", () =
     );
 
     expect(result.ok).toBe(true);
-    expect(ws.data.getTaskById("t1")?.priority).toBe("LOW");
+    expect((await ws.data.getTaskById("t1"))?.priority).toBe("LOW");
   });
 
   it("rejects moving an existing deadline into the past", async () => {
@@ -110,7 +110,7 @@ describe("TC-004 · F_REQ-1.4 Description, deadline and priority per task", () =
   });
 
   it("returns 'You do not have access' when an Events Director edits a task", async () => {
-    ws.actAs("Events Director");
+    await ws.actAs("Events Director");
     const result = await ws.tasks.updateTaskAction("t3", taskInput());
 
     expect(result).toEqual({ ok: false, message: "You do not have access to edit tasks." });
