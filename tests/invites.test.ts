@@ -76,7 +76,8 @@ describe("F_REQ-8 · Invite-only sign-up links", () => {
       accessRole: "Finance Director",
       role: "Sponsorships Officer",
     });
-    expect(member.passwordHash).not.toContain(signup.password);
+    expect(member).not.toHaveProperty("passwordHash");
+    expect(JSON.stringify(member)).not.toContain(signup.password);
     expect(cookieJar.get("cca_session")).toMatch(new RegExp(`^${member.id}\\.`));
     expect(ws.data.getInviteById(link.inviteId)).toMatchObject({ acceptedMemberId: member.id });
 

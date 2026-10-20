@@ -42,7 +42,6 @@ export interface Member {
   role: string;
   accessRole: AccessRole;
   email: string;
-  passwordHash: string;
 }
 
 export interface CcaEvent {
