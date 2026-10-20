@@ -11,11 +11,10 @@ export const dynamic = "force-dynamic";
 
 export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const invite = findInviteByTokenHash(hashInviteToken(token));
-  const problem = inviteProblem(invite);
+  const invite = await findInviteByTokenHash(hashInviteToken(token));
+  const problem = await inviteProblem(invite);
   const sessionId = await getSessionMemberId();
-  const signedInAs = sessionId ? getMemberById(sessionId) : undefined;
-  const inviter = invite ? getMemberById(invite.invitedById) : undefined;
+  const [signedInAs, inviter] = await Promise.all([getMemberById(sessionId), getMemberById(invite?.invitedById ?? null)]);
 
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-12">

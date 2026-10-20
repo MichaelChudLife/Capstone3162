@@ -1,7 +1,7 @@
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
-import { getTasks, getEvents, getEventById, getDashboardStats } from "@/lib/data";
+import { getTasks, getEvents, getDashboardStats } from "@/lib/data";
 import { requireCurrentMember } from "@/lib/auth";
 import { StatusPill, PriorityInline, DueText } from "@/components/ui";
 import { daysUntil } from "@/lib/format";
@@ -27,9 +27,8 @@ function ChevronRight() {
 
 export default async function DashboardPage() {
   const user = await requireCurrentMember();
-  const stats = getDashboardStats(user.id);
-  const events = getEvents();
-  const tasks = getTasks();
+  const [stats, events, tasks] = await Promise.all([getDashboardStats(user.id), getEvents(), getTasks()]);
+  const eventById = new Map(events.map((event) => [event.id, event]));
 
   const myTasksAll = tasks.filter((t) => t.assigneeIds.includes(user.id));
 
@@ -92,7 +91,7 @@ export default async function DashboardPage() {
         </header>
         <ul>
           {myTasks.map((task) => {
-            const event = getEventById(task.eventId);
+            const event = task.eventId ? eventById.get(task.eventId) : undefined;
             const done = task.status === "DONE";
             return (
               <li key={task.id} className="border-t border-[var(--border)]">

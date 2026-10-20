@@ -25,12 +25,16 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
 export default async function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireCurrentMember();
-  const task = getTaskById(id);
+  const task = await getTaskById(id);
   if (!task) notFound();
 
-  const event = getEventById(task.eventId);
-  const assignees = getMembersByIds(task.assigneeIds);
   const canEdit = hasPermission("manage_tasks", user);
+  const [event, assignees, members, events] = await Promise.all([
+    getEventById(task.eventId),
+    getMembersByIds(task.assigneeIds),
+    canEdit ? getMembers() : [],
+    canEdit ? getEvents() : [],
+  ]);
   const canUpdate = canUpdateTask(task, user);
 
   return (
@@ -52,7 +56,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
       <PageHeader
         title={task.title}
         subtitle={event ? `Sub-task of ${event.title}` : "General committee task"}
-        actions={canEdit ? <EditTaskButton task={task} members={getMembers()} events={getEvents()} /> : undefined}
+        actions={canEdit ? <EditTaskButton task={task} members={members} events={events} /> : undefined}
       />
 
       <div className="mb-5 flex flex-wrap items-center gap-2">

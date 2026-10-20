@@ -7,7 +7,7 @@ import { ok, refused } from "@/lib/action-result";
 import type { ActionResult } from "@/lib/types";
 
 export async function loginAction(email: string, password: string): Promise<ActionResult<null>> {
-  const member = authenticate(email, password);
+  const member = await authenticate(email, password);
   if (!member) {
     return refused("Invalid email or password.");
   }

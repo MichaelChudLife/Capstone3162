@@ -1,10 +1,10 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum TaskStatus {
@@ -37,6 +37,7 @@ model Member {
   accessRole     AccessRole         @default(COMMITTEE_MEMBER)
   email          String             @unique
   passwordHash   String
+  createdAt      DateTime           @default(now())
   tasks          Task[]             @relation("TaskAssignees")
   statusChanges  TaskStatusChange[]
   reminders      TaskReminder[]
@@ -94,6 +95,7 @@ model TaskStatusChange {
   actor      Member?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
   actorId    String?
   at         DateTime   @default(now())
+  seq        Int        @default(autoincrement())
 
   @@index([taskId, at])
 }
@@ -134,4 +136,9 @@ model Invite {
   revokedAt        DateTime?
 
   @@index([email])
+}
+
+model Workspace {
+  id      Int @id @default(1)
+  version Int @default(1)
 }

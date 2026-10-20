@@ -16,7 +16,13 @@ export default async function PageHeader({
 }) {
   const user = await requireCurrentMember();
   const now = new Date();
-  const items: BellItem[] = getRemindersForMember(user.id, now).map(({ reminder, task }) => ({
+  const canCreateTasks = hasPermission("manage_tasks", user);
+  const [reminders, members, events] = await Promise.all([
+    getRemindersForMember(user.id, now),
+    canCreateTasks ? getMembers() : [],
+    canCreateTasks ? getEvents() : [],
+  ]);
+  const items: BellItem[] = reminders.map(({ reminder, task }) => ({
     id: reminder.id,
     taskId: task.id,
     title: task.title,
@@ -33,7 +39,7 @@ export default async function PageHeader({
       </div>
       <div className="flex flex-wrap items-center gap-3">
         {actions}
-        {hasPermission("manage_tasks", user) && <NewTaskButton members={getMembers()} events={getEvents()} />}
+        {canCreateTasks && <NewTaskButton members={members} events={events} />}
         <NotificationsBell items={items} />
         <UserMenu
           user={{

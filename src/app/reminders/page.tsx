@@ -1,13 +1,13 @@
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
-import { getReminders, getRemindersForMember, getMembersByIds, getEventById, hasPermission } from "@/lib/data";
+import { getReminders, getRemindersForMember, getMembers, getEvents, hasPermission } from "@/lib/data";
 import { requireCurrentMember } from "@/lib/auth";
 import { reminderLabel, REMINDER_TITLE, DUE_SOON_HOURS } from "@/lib/reminder-rules";
 import { timeAgo } from "@/lib/format";
 import { AvatarStack, PriorityTag, UnassignedFlag, assigneeNames } from "@/components/ui";
 import { AlertIcon, ClockIcon } from "@/components/icons";
-import type { ReminderKind, Task } from "@/lib/types";
+import type { CcaEvent, Member, ReminderKind, Task } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +22,12 @@ interface Row {
   kind: ReminderKind;
   unread?: boolean;
   firedAt?: string;
+  assignees: Member[];
+  event?: CcaEvent;
 }
 
 function ReminderRow({ row, now }: { row: Row; now: Date }) {
-  const assignees = getMembersByIds(row.task.assigneeIds);
-  const event = getEventById(row.task.eventId);
+  const { assignees, event } = row;
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4">
       <AvatarStack members={assignees} size={34} max={2} />
@@ -63,15 +64,28 @@ export default async function RemindersPage({ searchParams }: { searchParams: Pr
   const canSeeCommittee = hasPermission("manage_tasks", user);
   const showCommittee = canSeeCommittee && view === "committee";
 
-  const rows: Row[] = showCommittee
-    ? getReminders(user, now).map((r) => ({ key: r.task.id, task: r.task, kind: r.kind }))
-    : getRemindersForMember(user.id, now).map(({ reminder, task }) => ({
-        key: reminder.id,
-        task,
-        kind: reminder.kind,
-        unread: reminder.readAt === null,
-        firedAt: reminder.firedAt,
-      }));
+  const [members, events, entries] = await Promise.all([
+    getMembers(),
+    getEvents(),
+    showCommittee
+      ? getReminders(user, now).then((list) => list.map((r) => ({ key: r.task.id, task: r.task, kind: r.kind })))
+      : getRemindersForMember(user.id, now).then((list) =>
+          list.map(({ reminder, task }) => ({
+            key: reminder.id,
+            task,
+            kind: reminder.kind,
+            unread: reminder.readAt === null,
+            firedAt: reminder.firedAt,
+          })),
+        ),
+  ]);
+  const memberById = new Map(members.map((member) => [member.id, member]));
+  const eventById = new Map(events.map((event) => [event.id, event]));
+  const rows: Row[] = entries.map((entry) => ({
+    ...entry,
+    assignees: entry.task.assigneeIds.flatMap((id) => memberById.get(id) ?? []),
+    event: entry.task.eventId ? eventById.get(entry.task.eventId) : undefined,
+  }));
 
   const tabClass = (active: boolean) =>
     `rounded-lg px-3 py-1.5 text-sm font-medium ${active ? "bg-[var(--surface)] text-[var(--ink)] shadow-sm" : "text-[var(--muted)] hover:text-[var(--ink)]"}`;

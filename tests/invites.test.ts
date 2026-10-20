@@ -1,19 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { freshWorkspace } from "./helpers";
-
-const cookieJar = vi.hoisted(() => new Map<string, string>());
-
-vi.mock("next/headers", () => ({
-  cookies: async () => ({
-    get: (name: string) => (cookieJar.has(name) ? { name, value: cookieJar.get(name)! } : undefined),
-    set: (name: string, value: string) => {
-      cookieJar.set(name, value);
-    },
-    delete: (name: string) => {
-      cookieJar.delete(name);
-    },
-  }),
-}));
+import { cookieJar } from "./session";
 
 type Workspace = Awaited<ReturnType<typeof freshWorkspace>>;
 let ws: Workspace;
@@ -21,7 +8,6 @@ let ws: Workspace;
 const signup = { name: "Priya Raman", password: "sponsor-season-26", confirmPassword: "sponsor-season-26" };
 
 beforeEach(async () => {
-  cookieJar.clear();
   ws = await freshWorkspace();
 });
 
@@ -36,19 +22,19 @@ describe("F_REQ-8 · Invite-only sign-up links", () => {
     const link = await invite();
 
     expect(link.path).toMatch(/^\/invite\/[A-Za-z0-9_-]{43}$/);
-    const stored = ws.data.getInviteById(link.inviteId)!;
+    const stored = (await ws.data.getInviteById(link.inviteId))!;
     expect(stored).toMatchObject({ email: "priya@cca.org.au", accessRole: "Committee Member", acceptedAt: null });
-    expect(JSON.stringify(ws.data.invites)).not.toContain(link.token);
+    expect(JSON.stringify(await ws.db.invite.findMany())).not.toContain(link.token);
     expect(new Date(stored.expiresAt).getTime() - new Date(stored.createdAt).getTime()).toBe(7 * 86400000);
   });
 
   it("returns 'You do not have access' when anyone else tries to invite", async () => {
-    ws.actAs("Committee Director");
+    await ws.actAs("Committee Director");
 
     const result = await ws.invites.createInviteAction({ email: "x@cca.org.au", accessRole: "Committee Member", position: "" });
 
     expect(result).toEqual({ ok: false, message: "You do not have access to invite members." });
-    expect(ws.data.invites).toHaveLength(0);
+    expect(await ws.db.invite.count()).toBe(0);
   });
 
   it("rejects invalid emails, existing members and duplicate open invites", async () => {
@@ -68,7 +54,7 @@ describe("F_REQ-8 · Invite-only sign-up links", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const member = ws.data.getMemberById(result.data.memberId)!;
+    const member = (await ws.data.getMemberById(result.data.memberId))!;
     expect(member).toMatchObject({
       name: "Priya Raman",
       initials: "PR",
@@ -79,7 +65,7 @@ describe("F_REQ-8 · Invite-only sign-up links", () => {
     expect(member).not.toHaveProperty("passwordHash");
     expect(JSON.stringify(member)).not.toContain(signup.password);
     expect(cookieJar.get("cca_session")).toMatch(new RegExp(`^${member.id}\\.`));
-    expect(ws.data.getInviteById(link.inviteId)).toMatchObject({ acceptedMemberId: member.id });
+    expect(await ws.data.getInviteById(link.inviteId)).toMatchObject({ acceptedMemberId: member.id });
 
     const login = await import("@/app/login/actions");
     expect(await login.loginAction("priya@cca.org.au", signup.password)).toEqual({ ok: true, data: null });
@@ -92,12 +78,12 @@ describe("F_REQ-8 · Invite-only sign-up links", () => {
     const again = await ws.signup.acceptInviteAction(link.token, { ...signup, name: "Someone Else" });
 
     expect(again).toMatchObject({ ok: false, message: expect.stringContaining("already been used") });
-    expect(ws.data.getMembers().filter((m) => m.email === "priya@cca.org.au")).toHaveLength(1);
+    expect((await ws.data.getMembers()).filter((m) => m.email === "priya@cca.org.au")).toHaveLength(1);
   });
 
   it("refuses an expired link", async () => {
     const link = await invite();
-    ws.data.getInviteById(link.inviteId)!.expiresAt = new Date(Date.now() - 1000).toISOString();
+    await ws.db.invite.update({ where: { id: link.inviteId }, data: { expiresAt: new Date(Date.now() - 1000) } });
 
     const result = await ws.signup.acceptInviteAction(link.token, signup);
 
@@ -106,12 +92,12 @@ describe("F_REQ-8 · Invite-only sign-up links", () => {
 
   it("refuses a cancelled link, and only the IT Director can cancel", async () => {
     const link = await invite();
-    ws.actAs("Committee Director");
+    await ws.actAs("Committee Director");
     expect(await ws.invites.revokeInviteAction(link.inviteId)).toEqual({
       ok: false,
       message: "You do not have access to manage invites.",
     });
-    ws.actAs("IT Director");
+    await ws.actAs("IT Director");
 
     await ws.invites.revokeInviteAction(link.inviteId);
     const result = await ws.signup.acceptInviteAction(link.token, signup);
@@ -140,7 +126,7 @@ describe("F_REQ-8 · Invite-only sign-up links", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(Object.keys(result.errors ?? {}).sort()).toEqual(["name", "password"]);
-    expect(ws.data.getMemberByEmail("priya@cca.org.au")).toBeUndefined();
+    expect(await ws.data.getMemberByEmail("priya@cca.org.au")).toBeUndefined();
   });
 
   it("rejects mismatched passwords and a made-up token", async () => {

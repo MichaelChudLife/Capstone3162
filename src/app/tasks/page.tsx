@@ -1,7 +1,7 @@
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import AppShell from "@/components/AppShell";
-import { getTasksByStatus, getMembersByIds, getEventById, getTasks, canUpdateTask } from "@/lib/data";
+import { getTasksByStatus, getMembers, getEvents, canUpdateTask } from "@/lib/data";
 import { requireCurrentMember } from "@/lib/auth";
 import { STATUS_ORDER, STATUS_LABEL, type TaskStatus } from "@/lib/types";
 import { AvatarStack, DueBadge, PriorityTag, UnassignedFlag, assigneeNames } from "@/components/ui";
@@ -17,15 +17,22 @@ const columnDot: Record<TaskStatus, string> = {
 
 export default async function TasksPage() {
   const user = await requireCurrentMember();
-  const total = getTasks().length;
+  const [columns, members, events] = await Promise.all([
+    Promise.all(STATUS_ORDER.map((status) => getTasksByStatus(status))),
+    getMembers(),
+    getEvents(),
+  ]);
+  const total = columns.reduce((sum, column) => sum + column.length, 0);
+  const memberById = new Map(members.map((member) => [member.id, member]));
+  const eventById = new Map(events.map((event) => [event.id, event]));
 
   return (
     <AppShell user={user}>
       <PageHeader title="Tasks" subtitle={`${total} tasks across the committee · move menu on each card`} />
 
       <div className="grid gap-5 lg:grid-cols-3">
-        {STATUS_ORDER.map((status) => {
-          const tasks = getTasksByStatus(status);
+        {STATUS_ORDER.map((status, index) => {
+          const tasks = columns[index];
           return (
             <div key={status} className="flex flex-col rounded-2xl bg-[var(--surface-2)] p-3">
               <div className="mb-3 flex items-center justify-between px-1">
@@ -38,8 +45,8 @@ export default async function TasksPage() {
 
               <div className="flex flex-col gap-3">
                 {tasks.map((task) => {
-                  const assignees = getMembersByIds(task.assigneeIds);
-                  const event = getEventById(task.eventId);
+                  const assignees = task.assigneeIds.flatMap((id) => memberById.get(id) ?? []);
+                  const event = task.eventId ? eventById.get(task.eventId) : undefined;
                   return (
                     <article key={task.id} className="card p-4">
                       <div className="mb-2 flex items-start justify-between gap-2">

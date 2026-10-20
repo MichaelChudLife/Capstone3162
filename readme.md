@@ -18,17 +18,27 @@ Task and event management demo for the Commerce and Computing Association commit
 - Next.js 16 (App Router) + React 19
 - TypeScript
 - Tailwind CSS v4
+- PostgreSQL through Prisma ORM 7 (`@prisma/adapter-pg`)
+- Hosted on Vercel with a Neon Postgres database (see [Deploy](#deploy-to-vercel))
 
 ## Run it
 
+Needs Node.js 22.18 or newer.
+
 ```bash
-npm install
-npm run dev
-# open http://localhost:3000
+npm install                # also generates the Prisma client
+cp .env.example .env
+npm run db:local           # terminal 1: starts Postgres on port 54329 (data kept in .local-db/)
+npm run db:setup           # terminal 2: creates the tables and seeds the demo workspace
+npm run dev                # open http://localhost:3000
 ```
 
-You'll be redirected to `/login`. Demo credentials — every seeded member shares the
-same password, `Committee2026!`:
+`npm run db:local` downloads nothing extra and needs no Docker; stop it with Ctrl+C. To use
+another Postgres instead, point `DATABASE_URL` in `.env` at it. `npm run db:reset` wipes the
+database and reseeds it.
+
+You'll be redirected to `/login`. Locally, every seeded member shares the password
+`Committee2026!` (a deployed site uses the `SEED_PASSWORD` you set instead):
 
 | Email | Access role |
 |-------|-------------|
@@ -38,8 +48,8 @@ same password, `Committee2026!`:
 | yahya@cca.org.au | Events Director |
 | nathanael@cca.org.au | Marketing Director |
 
-Set a real `SESSION_SECRET` env var before deploying anywhere beyond a local demo —
-it falls back to an insecure default otherwise (`src/lib/auth.ts`).
+Locally a built-in development `SESSION_SECRET` is used when none is set. In production
+the app refuses to sign anyone in until `SESSION_SECRET` is at least 32 characters.
 
 ## Screens
 
@@ -73,15 +83,19 @@ Unit tests live in `tests/` and are named by RTM test case, so results map strai
 | TC-006 | F_REQ-3 Reminders at 48 hours and at the deadline, per assignee, in-app only | `tests/reminders.test.ts` |
 | TC-005 / TC-006 (label clash) | F_REQ-5 Committee Member can only update self-assigned tasks; Committee Director has full privileges | `tests/access-control.test.ts` — the RTM lists these as TC-008 / TC-009 |
 | — | F_REQ-8 Invite-only sign-up links | `tests/invites.test.ts` |
+| — | F_REQ-8 Password hashes never reach the browser | `tests/credentials.test.ts` |
+| — (supports TC-016) | NF_REQ-2 Actions run as the signed-in member, production secrets enforced, live version shared through the database | `tests/deployment.test.ts` |
 | TC-010 | F_REQ-7 Budget — expected vs actual, variance calculated automatically, AUD | `tests/budget.test.ts` |
 
 Each suite also includes negative tests confirming that roles without the permission get a "You do not have access" result.
 
-`tests/**/*.test.ts` run in Node; `tests/**/*.test.tsx` are React Testing Library component tests and run in jsdom (two Vitest projects in `vitest.config.mts`).
+`tests/**/*.test.ts` run in Node against a real Postgres; `tests/**/*.test.tsx` are React Testing Library component tests and run in jsdom (two Vitest projects in `vitest.config.mts`).
 
-These tests exercise permission logic (`hasPermission`, `canUpdateTask`) directly and don't
-go through HTTP, so they don't touch the session cookie — `tests/helpers.ts`'s `actAs(role)`
-keeps switching the fixed test identity's access role, same as before auth was added.
+`npm test` starts a throwaway Postgres for the run (`tests/global-setup.ts`), gives each worker
+its own database, and resets it to the seeded demo data before every test. To use an existing
+server instead (for example in CI), set `TEST_DATABASE_ADMIN_URL` to a superuser connection
+string. Tests sign in by setting the session cookie (`signInAs` in `tests/helpers.ts`), and
+`actAs(role)` changes the signed-in member's access role.
 
 ## Code layout
 
@@ -90,10 +104,15 @@ keeps switching the fixed test identity's access role, same as before auth was a
 | `src/lib/types.ts` | Domain types, input shapes (`EventInput`, `TaskInput`, `BudgetItemInput`), `ActionResult` |
 | `src/lib/validation.ts` | Pure validators shared by the forms (client) and server actions |
 | `src/lib/money.ts` | AUD helpers for F_REQ-7: parse/format amounts, per-item variance, `summariseBudget` totals. Amounts are integer cents |
-| `src/lib/data.ts` | In-memory store and accessors — the swap point for Prisma. `hasPermission` / `canUpdateTask` implement F_REQ-5 |
+| `src/lib/data.ts` | All database reads and writes through Prisma, returning the plain types in `types.ts`. `hasPermission` / `canUpdateTask` implement F_REQ-5 |
+| `src/lib/db.ts` | The Prisma client (one per server instance, pooled `pg` connection, `DATABASE_URL`) |
+| `prisma/schema.prisma`, `prisma/migrations/` | Database schema and the SQL migrations applied by `prisma migrate deploy` |
+| `src/lib/seed.ts`, `prisma/seed.ts` | Demo workspace data, and the seed command that loads it into an empty database |
+| `scripts/local-db.mjs` | `npm run db:local` — a local Postgres for development, no install needed |
 | `src/lib/action-result.ts` | `ok` / `denied` / `invalid` helpers for server action results |
 | `src/lib/password.ts` | scrypt password hashing (`hashPassword`, `verifyPassword`) |
-| `src/lib/auth.ts` | Session cookie sign/verify/create/destroy, `requireCurrentMember` (pages), `syncCurrentUserFromSession` (server actions) |
+| `src/lib/auth.ts` | Session cookie sign/verify/create/destroy, `requireCurrentMember` (pages), `currentActor` (server actions — every action acts as the member in the request's session) |
+| `src/instrumentation.ts` | Runs once per server start: sets the server time zone (`APP_TIME_ZONE`, default Australia/Melbourne) so dates aren't shown in UTC on hosted servers |
 | `src/proxy.ts` | Route gate for F_REQ-8 — redirects to `/login` without a valid session, lets `/invite/*` through, and slides the 30-minute session on every request except the `/api/live` poll |
 | `src/app/login/actions.ts` | `loginAction` (checks credentials, creates the session), `logoutAction` |
 | `src/app/events/actions.ts` | Create, update and delete event server actions (`manage_events`) |
@@ -116,7 +135,7 @@ keeps switching the fixed test identity's access role, same as before auth was a
 **Demo:** log in as `yunsoo@cca.org.au` in one browser and `sener@cca.org.au` in a private window.
 
 - **Status (F_REQ-2)** — as Sener, open *Book Woodside room 3.01* and press **Completed**. YunSoo's open page updates within about 3 seconds without a reload, and both see the change in **Activity** with Sener's name and the time. Members only get the status control on tasks assigned to them; a director gets it on every task.
-- **Live updates** — every change bumps a workspace counter. Open pages poll `/api/live` every 3 seconds (paused while the tab is hidden) and refresh when it moves. Polling does not extend the 30-minute session.
+- **Live updates** — every change bumps a workspace counter stored in the database, so every server instance sees it. Open pages poll `/api/live` every 3 seconds (paused while the tab is hidden) and refresh when it moves. Polling does not extend the 30-minute session.
 - **Reminders (F_REQ-3)** — each assignee gets one reminder when a deadline is within 48 hours and another once it passes; the overdue one replaces the 48-hour one. Completing a task clears its reminders, and moving the deadline re-arms them. In-app only — no email.
 - **Seeded for the demo** — Sener has *Submit BBQ food safety checklist* due in about 20 hours and *Send volunteer roster*, which is already overdue.
 
@@ -143,26 +162,41 @@ The seeded data includes budgets for *Industry Networking Night* and *Semester 2
 
 ## Data layer
 
-The demo runs on an in-memory data store (`src/lib/data.ts`) seeded with realistic committee data, so it runs with zero database setup. The store deliberately mirrors a Prisma schema — see `prisma/schema.prisma` (PostgreSQL), which is the intended production schema.
+Data lives in PostgreSQL. `prisma/schema.prisma` is the source of truth and `src/lib/data.ts` is the only module that queries it, so pages and server actions never touch Prisma directly. Task assignees are a many-to-many relation (`Task.assignees` ↔ `Member.tasks`), and deleting an event cascades to its sub-tasks, budget items, status history and reminders (`onDelete: Cascade`).
 
-To move to a real database:
+- **Password hashes** stay in the database. `Member` in `src/lib/types.ts` has no `passwordHash`, and only `authenticate()` reads it, so a hash can't be passed to a client component.
+- **Identity** comes from the session cookie on every request (`currentActor()` / `requireCurrentMember()`), never from shared server state, so concurrent requests on one server can't act as each other.
+- **Changing the schema** — edit `prisma/schema.prisma`, then with `npm run db:local` running:
 
-```bash
-npm i prisma @prisma/client
-# set DATABASE_URL in .env
-npx prisma migrate dev
-```
+  ```bash
+  npx prisma migrate dev --name describe-the-change
+  ```
 
-Then swap the `src/lib/data.ts` accessor functions (`getTasks`, `createTask`, `updateTask`, `createEvent`, `deleteEvent`, `setTaskStatus`, `getBudgetItemsForEvent`, `createBudgetItem`, …) for Prisma client calls — the function signatures and types (`src/lib/types.ts`) already match the schema. Task assignees are a many-to-many relation (`Task.assignees` ↔ `Member.tasks`), and deleting an event cascades to its sub-tasks and budget items (`onDelete: Cascade`). `Member.passwordHash` exists only in the database: `src/lib/types.ts` leaves it off `Member` so a hash can never be passed to a client component, so query members with `omit: { passwordHash: true }` and check passwords in one server-side function like `authenticate()`.
+  Commit the new folder under `prisma/migrations/`. Deploys apply it automatically.
 
-**Known simplification:** "who's logged in" for a given request is tracked with a single
-module-level `currentUserId` variable (`src/lib/data.ts`), refreshed from the session cookie
-at the top of every page and server action (`requireCurrentMember` / `syncCurrentUserFromSession`
-in `src/lib/auth.ts`). That mirrors the existing in-memory store's own design (one shared,
-un-partitioned workspace, no per-request isolation) and is fine for local/demo use with one
-browser session at a time. A real multi-user deployment on a real database should thread the
-authenticated member through request-scoped state (e.g. `AsyncLocalStorage`, or read straight
-from the DB per call) instead of a shared mutable variable.
+## Deploy to Vercel
+
+The live site runs on Vercel (functions in Sydney, `syd1`, set in `vercel.json`) with a Neon Postgres database. Both have free plans. Every push to `main` deploys automatically.
+
+**One-time setup** (done in the browser by whoever owns the GitHub repo):
+
+1. Sign in to [vercel.com](https://vercel.com) with GitHub and choose **Add New → Project**, then import this repository. Leave the build settings as they are — `vercel.json` already sets the build command. The first build fails because there is no database yet; that's expected.
+2. Open the project's **Storage** tab, choose **Neon** (Postgres), pick the **Sydney (ap-southeast-2)** region and the free plan, and connect it to the project for all environments. This adds `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED` (used for migrations) automatically. Under *Advanced options*, turn on **Preview** branching so preview deployments get their own copy of the database instead of migrating production.
+3. In **Settings → Environment Variables**, add:
+
+   | Name | Value | Environments |
+   |------|-------|--------------|
+   | `SESSION_SECRET` | output of `openssl rand -base64 32` | Production, Preview |
+   | `SEED_PASSWORD` | the password the 5 demo accounts will use (10+ characters; share it privately, not in the repo) | Production, Preview |
+   | `APP_TIME_ZONE` | `Australia/Melbourne` (optional — this is the default) | Production, Preview |
+
+4. **Deployments → Redeploy** so the build picks up the variables.
+
+**What each deploy does** (`npm run vercel-build`): `prisma migrate deploy` applies any new migrations, `prisma db seed` loads the demo workspace only if the database has no members yet, then `next build`. Re-deploying never overwrites existing data.
+
+**After the first deploy**, log in as `michael@cca.org.au` (IT Director) with your `SEED_PASSWORD` and use **Members → Invite member** to add real people. Changing `SESSION_SECRET` later signs everyone out; changing `SEED_PASSWORD` later has no effect because the database is only seeded once.
+
+**Security** — Vercel serves the site over HTTPS only. `next.config.ts` adds HSTS, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin` (keeps invite tokens out of referrer headers). Passwords are salted scrypt hashes (`src/lib/password.ts`) and session cookies are httpOnly, `SameSite=Lax` and `Secure` in production.
 
 ## Theming
 

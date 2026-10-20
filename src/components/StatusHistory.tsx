@@ -1,10 +1,12 @@
 import { Avatar } from "@/components/ui";
-import { getMemberById, getStatusHistory } from "@/lib/data";
+import { getMembersByIds, getStatusHistory } from "@/lib/data";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { STATUS_LABEL } from "@/lib/types";
 
-export default function StatusHistory({ taskId }: { taskId: string }) {
-  const history = getStatusHistory(taskId);
+export default async function StatusHistory({ taskId }: { taskId: string }) {
+  const history = await getStatusHistory(taskId);
+  const actorIds = [...new Set(history.map((change) => change.actorId).filter((id): id is string => Boolean(id)))];
+  const actors = new Map((await getMembersByIds(actorIds)).map((member) => [member.id, member]));
 
   return (
     <section className="card mt-6 p-2">
@@ -17,7 +19,7 @@ export default function StatusHistory({ taskId }: { taskId: string }) {
       ) : (
         <ol className="border-t border-[var(--border)]">
           {history.map((change) => {
-            const actor = getMemberById(change.actorId);
+            const actor = change.actorId ? actors.get(change.actorId) : undefined;
             return (
               <li key={change.id} className="flex items-start gap-3 border-b border-[var(--border)] px-4 py-3 last:border-0">
                 <Avatar member={actor} size={28} />
