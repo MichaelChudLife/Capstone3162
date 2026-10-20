@@ -19,7 +19,7 @@ Task and event management demo for the Commerce and Computing Association commit
 - TypeScript
 - Tailwind CSS v4
 - PostgreSQL through Prisma ORM 7 (`@prisma/adapter-pg`)
-- Hosted on Vercel with a Neon Postgres database (see [Deploy](#deploy-to-vercel))
+- Hosted on Vercel with a Prisma Postgres database (see [Deploy](#deploy-to-vercel))
 
 ## Run it
 
@@ -176,12 +176,14 @@ Data lives in PostgreSQL. `prisma/schema.prisma` is the source of truth and `src
 
 ## Deploy to Vercel
 
-The live site runs on Vercel (functions in Sydney, `syd1`, set in `vercel.json`) with a Neon Postgres database. Both have free plans. Every push to `main` deploys automatically.
+The live site, https://capstone3162.vercel.app, runs on Vercel with a Prisma Postgres database in Washington, D.C. (`us-east-1`). Both have free plans. Every push to `main` deploys automatically.
+
+**Keep the app and the database in the same region.** Each page makes several database queries in a row, so the function region in `vercel.json` (`"regions": ["iad1"]`) must match the database region. With the app in Sydney and the database in the US, the dashboard took over 2 seconds; side by side it is a few hundred milliseconds. If you move the database, change `regions` to match (for example `sin1` for Singapore, `ap-southeast-1`).
 
 **One-time setup** (done in the browser by whoever owns the GitHub repo):
 
 1. Sign in to [vercel.com](https://vercel.com) with GitHub and choose **Add New → Project**, then import this repository. Leave the build settings as they are — `vercel.json` already sets the build command. The first build fails because there is no database yet; that's expected.
-2. Open the project's **Storage** tab, choose **Neon** (Postgres), pick the **Sydney (ap-southeast-2)** region and the free plan, and connect it to the project for all environments. This adds `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED` (used for migrations) automatically. Under *Advanced options*, turn on **Preview** branching so preview deployments get their own copy of the database instead of migrating production.
+2. Open the project's **Storage** tab, choose **Prisma Postgres**, pick a region and the free plan, and connect it to the project for Production and Preview. This adds `DATABASE_URL` automatically. Then set `regions` in `vercel.json` to the matching Vercel region (see above).
 3. In **Settings → Environment Variables**, add:
 
    | Name | Value | Environments |
