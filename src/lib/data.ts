@@ -397,16 +397,28 @@ export async function getReminders(member: Member, now = new Date()): Promise<Re
 
 export async function syncReminders(now = new Date()): Promise<number> {
   const rows = await db().task.findMany({
-    where: { status: { not: "DONE" }, dueDate: { not: null, lte: reminderHorizon(now) } },
-    include: taskInclude,
+    where: { status: { not: "DONE" }, dueDate: { not: null, lte: reminderHorizon(now) }, assignees: { some: {} } },
+    select: {
+      id: true,
+      status: true,
+      dueDate: true,
+      assignees: { select: { id: true } },
+      reminders: { select: { memberId: true, kind: true, dueDate: true } },
+    },
     orderBy: taskOrder,
   });
   const data: Prisma.TaskReminderCreateManyInput[] = [];
   for (const row of rows) {
-    const kind = reminderKindFor(toTask(row), now);
-    if (!kind || !row.dueDate) continue;
+    const dueDate = row.dueDate;
+    if (!dueDate) continue;
+    const kind = reminderKindFor({ status: row.status, dueDate: dueDate.toISOString() }, now);
+    if (!kind) continue;
+    const dbKind = KIND_TO_DB[kind];
     for (const { id: memberId } of row.assignees) {
-      data.push({ taskId: row.id, memberId, kind: KIND_TO_DB[kind], dueDate: row.dueDate, firedAt: now });
+      const fired = row.reminders.some(
+        (r) => r.memberId === memberId && r.kind === dbKind && r.dueDate.getTime() === dueDate.getTime(),
+      );
+      if (!fired) data.push({ taskId: row.id, memberId, kind: dbKind, dueDate, firedAt: now });
     }
   }
   if (data.length === 0) return 0;

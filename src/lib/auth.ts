@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { getMemberById } from "./data";
 import type { Member } from "./types";
 
@@ -79,10 +80,10 @@ export async function currentActor(): Promise<Member | null> {
 }
 
 /** For Server Components: resolves the logged-in member or redirects to /login. */
-export async function requireCurrentMember(): Promise<Member> {
+export const requireCurrentMember = cache(async (): Promise<Member> => {
   const memberId = await getSessionMemberId();
   if (!memberId) redirect("/login");
   const member = await getMemberById(memberId);
   if (!member) redirect("/login?signedout=1");
   return member;
-}
+});
