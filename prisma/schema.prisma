@@ -42,6 +42,7 @@ model Member {
   tasks          Task[]             @relation("TaskAssignees")
   statusChanges  TaskStatusChange[]
   reminders      TaskReminder[]
+  comments       TaskComment[]
   invitesSent    Invite[]           @relation("InvitesSent")
   acceptedInvite Invite?            @relation("InviteAccepted")
 }
@@ -83,6 +84,7 @@ model Task {
   createdAt     DateTime           @default(now())
   statusChanges TaskStatusChange[]
   reminders     TaskReminder[]
+  comments      TaskComment[]
 
   @@index([eventId])
 }
@@ -99,6 +101,18 @@ model TaskStatusChange {
   seq        Int        @default(autoincrement())
 
   @@index([taskId, at])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId    String
+  author    Member?  @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorId  String?
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
 }
 
 enum ReminderKind {

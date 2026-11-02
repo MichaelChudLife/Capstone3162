@@ -5,6 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import EditTaskButton from "@/components/EditTaskButton";
 import StatusControl from "@/components/StatusControl";
 import StatusHistory from "@/components/StatusHistory";
+import TaskComments from "@/components/TaskComments";
 import { Avatar, DueBadge, PriorityTag, StatusPill, UnassignedFlag } from "@/components/ui";
 import { CalendarIcon } from "@/components/icons";
 import { getEventById, getEvents, getMembers, getMembersByIds, getTaskById, hasPermission, canUpdateTask } from "@/lib/data";
@@ -22,8 +23,15 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
   );
 }
 
-export default async function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function TaskDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ q?: string | string[] }>;
+}) {
+  const [{ id }, { q }] = await Promise.all([params, searchParams]);
+  const keyword = typeof q === "string" ? q.slice(0, 100) : "";
   const user = await requireCurrentMember();
   const task = await getTaskById(id);
   if (!task) notFound();
@@ -113,6 +121,8 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
           <Detail label="Created">{formatDateTime(task.createdAt)}</Detail>
         </dl>
       </section>
+
+      <TaskComments taskId={task.id} keyword={keyword} />
 
       <StatusHistory taskId={task.id} />
     </AppShell>

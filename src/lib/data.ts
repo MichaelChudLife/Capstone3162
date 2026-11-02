@@ -14,6 +14,7 @@ import {
   type EventInput,
   type TaskInput,
   type StatusChange,
+  type TaskComment,
   type TaskReminder,
   type ReminderKind,
   type Invite,
@@ -47,6 +48,7 @@ type TaskRow = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
 type EventRow = Prisma.EventGetPayload<object>;
 type BudgetRow = Prisma.BudgetItemGetPayload<object>;
 type StatusChangeRow = Prisma.TaskStatusChangeGetPayload<object>;
+type CommentRow = Prisma.TaskCommentGetPayload<object>;
 type ReminderRow = Prisma.TaskReminderGetPayload<object>;
 type InviteRow = Prisma.InviteGetPayload<object>;
 
@@ -105,6 +107,16 @@ function toStatusChange(row: StatusChangeRow): StatusChange {
     to: row.toStatus,
     actorId: row.actorId,
     at: row.at.toISOString(),
+  };
+}
+
+function toComment(row: CommentRow): TaskComment {
+  return {
+    id: row.id,
+    taskId: row.taskId,
+    authorId: row.authorId,
+    body: row.body,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
@@ -362,6 +374,24 @@ export async function setTaskStatus(id: string, status: TaskStatus, actorId: str
 export async function getStatusHistory(taskId: string): Promise<StatusChange[]> {
   const rows = await db().taskStatusChange.findMany({ where: { taskId }, orderBy: [{ at: "desc" }, { seq: "desc" }] });
   return rows.map(toStatusChange);
+}
+
+export async function getTaskComments(taskId: string, keyword = ""): Promise<TaskComment[]> {
+  const term = keyword.trim();
+  const rows = await db().taskComment.findMany({
+    where: { taskId, ...(term ? { body: { contains: term.replace(/[\\%_]/g, "\\$&"), mode: "insensitive" } } : {}) },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+  return rows.map(toComment);
+}
+
+export async function countTaskComments(taskId: string): Promise<number> {
+  return db().taskComment.count({ where: { taskId } });
+}
+
+export async function addTaskComment(taskId: string, authorId: string, body: string): Promise<TaskComment> {
+  const row = await db().taskComment.create({ data: { taskId, authorId, body } });
+  return toComment(row);
 }
 
 export interface Reminder {

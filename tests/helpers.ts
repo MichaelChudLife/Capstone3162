@@ -4,7 +4,7 @@ import { cookieJar } from "./session";
 
 export const ME = "m1";
 
-const TABLES = ["Member", "Event", "Task", "BudgetItem", "TaskStatusChange", "TaskReminder", "Invite", "Workspace", "_TaskAssignees"];
+const TABLES = ["Member", "Event", "Task", "BudgetItem", "TaskStatusChange", "TaskComment", "TaskReminder", "Invite", "Workspace", "_TaskAssignees"];
 
 let demoPasswordHash: string | undefined;
 
@@ -26,6 +26,7 @@ export async function freshWorkspace() {
   const events = await import("@/app/events/actions");
   const budget = await import("@/app/events/budget-actions");
   const tasks = await import("@/app/tasks/actions");
+  const comments = await import("@/app/tasks/comment-actions");
   const app = await import("@/app/actions");
   const reminders = await import("@/app/reminders/actions");
   const invites = await import("@/app/members/invite-actions");
@@ -46,7 +47,7 @@ export async function freshWorkspace() {
   signOut();
   signInAs(ME);
 
-  return { db: client, data, events, budget, tasks, app, reminders, invites, signup, me: ME, user, actAs, signInAs, signOut };
+  return { db: client, data, events, budget, tasks, comments, app, reminders, invites, signup, me: ME, user, actAs, signInAs, signOut };
 }
 
 export function hoursFromNow(hours: number): string {

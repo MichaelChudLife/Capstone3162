@@ -121,6 +121,16 @@ function demoStatusChanges(now: Date) {
   ] as const;
 }
 
+function demoComments(now: Date) {
+  return [
+    { id: "c1", taskId: "t2", authorId: "m4", body: "Can we use the navy and gold from the brand kit so it matches the sponsor deck?", createdAt: dayOffset(now, -2, 15, 10) },
+    { id: "c2", taskId: "t2", authorId: "m3", body: "Yes. First draft is in the shared Drive folder. Still waiting on the final sponsor logos.", createdAt: dayOffset(now, -1, 10, 45) },
+    { id: "c3", taskId: "t3", authorId: "m2", body: "Two partner firms have confirmed so far. Following up the rest by email.", createdAt: dayOffset(now, -1, 16, 20) },
+    { id: "c4", taskId: "t15", authorId: "m5", body: "Form is half done. Does anyone have the fridge temperature log from the last BBQ?", createdAt: dayOffset(now, -1, 11, 30) },
+    { id: "c5", taskId: "t15", authorId: "m4", body: "It's in the events portal under past submissions. I'll send you the link.", createdAt: dayOffset(now, -1, 12, 5) },
+  ];
+}
+
 function demoBudgetItems(now: Date) {
   return [
     { id: "b1", eventId: "e1", description: "Venue hire — LTB Foyer", expectedCents: 120000, actualCents: 120000, createdAt: dayOffset(now, -12) },
@@ -149,6 +159,7 @@ export async function seedDemoWorkspace(client: PrismaClient, options: { passwor
       await tx.task.create({ data: { ...task, assignees: { connect: assigneeIds.map((id) => ({ id })) } } });
     }
     await tx.taskStatusChange.createMany({ data: [...demoStatusChanges(now)] });
+    await tx.taskComment.createMany({ data: demoComments(now) });
     await tx.budgetItem.createMany({ data: demoBudgetItems(now) });
     await tx.workspace.upsert({ where: { id: 1 }, update: {}, create: { id: 1, version: 1 } });
   });
