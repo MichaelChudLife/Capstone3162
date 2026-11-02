@@ -8,7 +8,7 @@ beforeEach(async () => {
   ws = await freshWorkspace();
 });
 
-describe("TC-006 · F_REQ-5 Committee Director has full event/task privileges", () => {
+describe("TC-008 · F_REQ-5 Committee Director has full event/task privileges", () => {
   it("can manage both events and tasks", async () => {
     await ws.actAs("Committee Director");
     const director = await ws.user();
@@ -18,7 +18,7 @@ describe("TC-006 · F_REQ-5 Committee Director has full event/task privileges", 
   });
 });
 
-describe("TC-005 · F_REQ-5 Committee Member can only update self-assigned tasks", () => {
+describe("TC-009 · F_REQ-5 Committee Member can only update self-assigned tasks", () => {
   it("cannot manage events or tasks broadly", async () => {
     await ws.actAs("Committee Member");
     const member = await ws.user();

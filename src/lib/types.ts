@@ -107,6 +107,18 @@ export interface StatusChange {
   at: string;
 }
 
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  authorId: string | null;
+  body: string;
+  createdAt: string;
+}
+
+export interface CommentInput {
+  body: string;
+}
+
 export type ReminderKind = "due_soon" | "overdue";
 
 export interface TaskReminder {

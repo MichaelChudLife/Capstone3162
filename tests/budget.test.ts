@@ -20,7 +20,7 @@ async function addItem(eventId: string, overrides: Partial<BudgetItemInput> = {}
   return (await ws.data.getBudgetItemById(result.data.id))!;
 }
 
-describe("TC-010 · F_REQ-7 Budget: expected vs actual, variance calculated automatically", () => {
+describe("TC-010 · F_REQ-6 Budget: expected vs actual, variance calculated automatically", () => {
   it("records an expected cost for an event", async () => {
     const item = await addItem("e4", { description: "Zoom licence", expectedCents: 1999 });
 
@@ -114,7 +114,7 @@ describe("TC-010 · F_REQ-7 Budget: expected vs actual, variance calculated auto
   });
 });
 
-describe("F_REQ-7 amount parsing and validation", () => {
+describe("F_REQ-6 amount parsing and validation", () => {
   it("parses AUD amounts into cents", async () => {
     expect(parseAudToCents("250")).toBe(25000);
     expect(parseAudToCents("$1,234.5")).toBe(123450);
@@ -151,7 +151,7 @@ describe("F_REQ-7 amount parsing and validation", () => {
   });
 });
 
-describe("F_REQ-7 budget access control", () => {
+describe("F_REQ-6 budget access control", () => {
   it.each(["IT Director", "Committee Director", "Events Director", "Finance Director"] as const)(
     "%s can record budget items",
     async (role) => {

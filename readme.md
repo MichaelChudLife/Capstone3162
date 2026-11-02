@@ -9,9 +9,11 @@ Task and event management demo for the Commerce and Computing Association commit
 - **Centralised dashboard (F_REQ-9)** — `/` shows the logged-in member's own overdue tasks, tasks due this week, open tasks, "My tasks" list, and upcoming events, personalised to whoever is signed in.
 - **Event & Task Management** — create and edit events (title, description, date, location); each event has a detail page with its sub-tasks nested underneath; deleting an event asks for confirmation and lists the sub-tasks it will remove.
 - **Task Assignment & Tracking** — assign a task to one or more committee members; unassigned tasks are flagged on the board, event pages and reminders. Each task has a detail page showing description, assignees, deadline, priority and status, with an edit form that blocks deadlines in the past.
-- **Event budget (F_REQ-7)** — each event page has a Budget section where directors record line items with an expected cost and, once the money is spent, the actual spend. Variance (actual − expected) is calculated and shown automatically per item and for the event total, coloured red when over budget and green when under. All amounts are in **AUD**; there is no invoice upload or accounting integration.
+- **Task comments (F_REQ-4)** — every task page has a Comments thread where any signed-in member can post updates and questions. Each comment belongs to one task and shows its author and time, and the thread can be searched by keyword (case-insensitive, matches highlighted). It is not real-time chat: open pages pick up new comments through the same 3-second refresh as status changes.
+- **Event budget (F_REQ-6)** — each event page has a Budget section where directors record line items with an expected cost and, once the money is spent, the actual spend. Variance (actual − expected) is calculated and shown automatically per item and for the event total, coloured red when over budget and green when under. All amounts are in **AUD**; there is no invoice upload or accounting integration.
 - **Kanban board** — Not started / In progress / Completed columns with a move menu on each card (shown only to directors and to members on their own assigned tasks).
 - **Deadline reminders** — colour-coded due badges (due soon / overdue), a dashboard reminders panel, a notifications bell, and a dedicated Reminders view that auto-groups tasks by urgency.
+- **Not built: meeting scheduling (F_REQ-7)** — cut by agreement with CCA, who schedule meetings with their existing external tools.
 
 ## Stack
 
@@ -81,11 +83,13 @@ Unit tests live in `tests/` and are named by RTM test case, so results map strai
 | TC-004 | F_REQ-1.4 Description, deadline, priority; no past deadlines | `tests/tasks.test.ts` |
 | TC-005 | F_REQ-2 Status updates across three states, logged with time and acting user, live refresh | `tests/status.test.ts`, `tests/components/status-control.test.tsx` |
 | TC-006 | F_REQ-3 Reminders at 48 hours and at the deadline, per assignee, in-app only | `tests/reminders.test.ts` |
-| TC-005 / TC-006 (label clash) | F_REQ-5 Committee Member can only update self-assigned tasks; Committee Director has full privileges | `tests/access-control.test.ts` — the RTM lists these as TC-008 / TC-009 |
+| TC-007 | F_REQ-4 Task-level comments tied to one task, keyword search, empty and over-length comments rejected | `tests/comments.test.ts` |
+| TC-008 | F_REQ-5 Committee Director has full event and task privileges | `tests/access-control.test.ts` |
+| TC-009 | F_REQ-5 Committee Member can only update self-assigned tasks | `tests/access-control.test.ts` |
 | — | F_REQ-8 Invite-only sign-up links | `tests/invites.test.ts` |
 | — | F_REQ-8 Password hashes never reach the browser | `tests/credentials.test.ts` |
 | — (supports TC-016) | NF_REQ-2 Actions run as the signed-in member, production secrets enforced, live version shared through the database | `tests/deployment.test.ts` |
-| TC-010 | F_REQ-7 Budget — expected vs actual, variance calculated automatically, AUD | `tests/budget.test.ts` |
+| TC-010 | F_REQ-6 Budget — expected vs actual, variance calculated automatically, AUD | `tests/budget.test.ts` |
 
 Each suite also includes negative tests confirming that roles without the permission get a "You do not have access" result.
 
@@ -103,7 +107,7 @@ string. Tests sign in by setting the session cookie (`signInAs` in `tests/helper
 |------|----------------|
 | `src/lib/types.ts` | Domain types, input shapes (`EventInput`, `TaskInput`, `BudgetItemInput`), `ActionResult` |
 | `src/lib/validation.ts` | Pure validators shared by the forms (client) and server actions |
-| `src/lib/money.ts` | AUD helpers for F_REQ-7: parse/format amounts, per-item variance, `summariseBudget` totals. Amounts are integer cents |
+| `src/lib/money.ts` | AUD helpers for F_REQ-6: parse/format amounts, per-item variance, `summariseBudget` totals. Amounts are integer cents |
 | `src/lib/data.ts` | All database reads and writes through Prisma, returning the plain types in `types.ts`. `hasPermission` / `canUpdateTask` implement F_REQ-5 |
 | `src/lib/db.ts` | The Prisma client (one per server instance, pooled `pg` connection, `DATABASE_URL`) |
 | `prisma/schema.prisma`, `prisma/migrations/` | Database schema and the SQL migrations applied by `prisma migrate deploy` |
@@ -118,6 +122,7 @@ string. Tests sign in by setting the session cookie (`signInAs` in `tests/helper
 | `src/app/events/actions.ts` | Create, update and delete event server actions (`manage_events`) |
 | `src/app/events/budget-actions.ts` | Create, update and delete budget item server actions (`manage_budget`) |
 | `src/app/tasks/actions.ts` | Create and update task server actions (`manage_tasks`) |
+| `src/app/tasks/comment-actions.ts`, `src/components/TaskComments.tsx`, `CommentForm.tsx` | F_REQ-4: post a comment (any signed-in member), and the Comments thread with keyword search on the task page |
 | `src/app/actions.ts` | `moveTaskAction` (`manage_tasks` or the assignee via `update_own_tasks`), `updateMemberRoleAction` (`manage_access`) |
 | `src/components/Modal.tsx`, `form.tsx` | Shared dialog shell and form field primitives |
 | `src/components/EventFormDialog.tsx`, `TaskFormDialog.tsx` | Create/edit forms used across pages |
@@ -139,6 +144,15 @@ string. Tests sign in by setting the session cookie (`signInAs` in `tests/helper
 - **Reminders (F_REQ-3)** — each assignee gets one reminder when a deadline is within 48 hours and another once it passes; the overdue one replaces the 48-hour one. Completing a task clears its reminders, and moving the deadline re-arms them. In-app only — no email.
 - **Seeded for the demo** — Sener has *Submit BBQ food safety checklist* due in about 20 hours and *Send volunteer roster*, which is already overdue.
 
+## Task comments (F_REQ-4)
+
+Open any task (`/tasks/[id]`) and scroll to **Comments**.
+
+- **Posting** — every signed-in member can comment on any task, not just their own. Comments are trimmed, can't be empty and are limited to 1,000 characters, checked on both the form and the server.
+- **Search** — the search box filters the task's comments by keyword, ignoring case, and highlights the matches. `%` and `_` are searched as ordinary characters.
+- **Seeded for the demo** — *Design event poster* and *Submit BBQ food safety checklist* each have a short thread; search the poster task for "logos".
+- **Deleting** a task's event deletes its comments. If a member's account is removed, their comments stay and show as "Former member".
+
 ## Invite links (F_REQ-8)
 
 Log in as the IT Director (`michael@cca.org.au`), open **Members** and choose **Invite member**.
@@ -147,7 +161,7 @@ Log in as the IT Director (`michael@cca.org.au`), open **Members** and choose **
 - Links expire after 7 days and work once. Only a SHA-256 hash of the token is stored, so a lost link can't be shown again; use **New link** under Pending invites (the old link stops working) or **Cancel invite**.
 - The invitee sets their name and a password (at least 10 characters) and is signed straight in with the invited role.
 
-## Event budget (F_REQ-7)
+## Event budget (F_REQ-6)
 
 Open an event (`/events/[id]`) and scroll to **Budget**.
 
@@ -162,7 +176,7 @@ The seeded data includes budgets for *Industry Networking Night* and *Semester 2
 
 ## Data layer
 
-Data lives in PostgreSQL. `prisma/schema.prisma` is the source of truth and `src/lib/data.ts` is the only module that queries it, so pages and server actions never touch Prisma directly. Task assignees are a many-to-many relation (`Task.assignees` ↔ `Member.tasks`), and deleting an event cascades to its sub-tasks, budget items, status history and reminders (`onDelete: Cascade`).
+Data lives in PostgreSQL. `prisma/schema.prisma` is the source of truth and `src/lib/data.ts` is the only module that queries it, so pages and server actions never touch Prisma directly. Task assignees are a many-to-many relation (`Task.assignees` ↔ `Member.tasks`), and deleting an event cascades to its sub-tasks, budget items, status history, comments and reminders (`onDelete: Cascade`).
 
 - **Password hashes** stay in the database. `Member` in `src/lib/types.ts` has no `passwordHash`, and only `authenticate()` reads it, so a hash can't be passed to a client component.
 - **Identity** comes from the session cookie on every request (`currentActor()` / `requireCurrentMember()`), never from shared server state, so concurrent requests on one server can't act as each other.

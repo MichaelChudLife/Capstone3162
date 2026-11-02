@@ -4,6 +4,7 @@ import {
   PRIORITY_ORDER,
   STATUS_ORDER,
   type BudgetItemInput,
+  type CommentInput,
   type EventInput,
   type FieldErrors,
   type InviteInput,
@@ -18,6 +19,7 @@ export const LIMITS = {
   taskTitle: 120,
   taskDescription: 2000,
   budgetDescription: 120,
+  commentBody: 1000,
   email: 254,
   position: 60,
   memberName: 80,
@@ -149,6 +151,15 @@ export function validateBudgetItemInput(
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   return { ok: true, value: { description, expectedCents: raw.expectedCents, actualCents } };
+}
+
+export function validateCommentInput(raw: CommentInput): Validation<CommentInput, keyof CommentInput> {
+  const body = (raw.body ?? "").trim();
+  if (!body) return { ok: false, errors: { body: "Write a comment before posting." } };
+  if (body.length > LIMITS.commentBody) {
+    return { ok: false, errors: { body: `Keep comments under ${LIMITS.commentBody} characters.` } };
+  }
+  return { ok: true, value: { body } };
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
