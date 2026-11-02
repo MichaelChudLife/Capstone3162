@@ -57,7 +57,7 @@ model Event {
   createdAt   DateTime     @default(now())
 }
 
-// F_REQ-7 — amounts are integer cents in AUD. actualCents is null until spend is recorded.
+// F_REQ-6 — amounts are integer cents in AUD. actualCents is null until spend is recorded.
 model BudgetItem {
   id            String   @id @default(cuid())
   event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)

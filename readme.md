@@ -9,9 +9,10 @@ Task and event management demo for the Commerce and Computing Association commit
 - **Centralised dashboard (F_REQ-9)** — `/` shows the logged-in member's own overdue tasks, tasks due this week, open tasks, "My tasks" list, and upcoming events, personalised to whoever is signed in.
 - **Event & Task Management** — create and edit events (title, description, date, location); each event has a detail page with its sub-tasks nested underneath; deleting an event asks for confirmation and lists the sub-tasks it will remove.
 - **Task Assignment & Tracking** — assign a task to one or more committee members; unassigned tasks are flagged on the board, event pages and reminders. Each task has a detail page showing description, assignees, deadline, priority and status, with an edit form that blocks deadlines in the past.
-- **Event budget (F_REQ-7)** — each event page has a Budget section where directors record line items with an expected cost and, once the money is spent, the actual spend. Variance (actual − expected) is calculated and shown automatically per item and for the event total, coloured red when over budget and green when under. All amounts are in **AUD**; there is no invoice upload or accounting integration.
+- **Event budget (F_REQ-6)** — each event page has a Budget section where directors record line items with an expected cost and, once the money is spent, the actual spend. Variance (actual − expected) is calculated and shown automatically per item and for the event total, coloured red when over budget and green when under. All amounts are in **AUD**; there is no invoice upload or accounting integration.
 - **Kanban board** — Not started / In progress / Completed columns with a move menu on each card (shown only to directors and to members on their own assigned tasks).
 - **Deadline reminders** — colour-coded due badges (due soon / overdue), a dashboard reminders panel, a notifications bell, and a dedicated Reminders view that auto-groups tasks by urgency.
+- **Not built: meeting scheduling (F_REQ-7)** — cut by agreement with CCA, who schedule meetings with their existing external tools.
 
 ## Stack
 
@@ -81,11 +82,12 @@ Unit tests live in `tests/` and are named by RTM test case, so results map strai
 | TC-004 | F_REQ-1.4 Description, deadline, priority; no past deadlines | `tests/tasks.test.ts` |
 | TC-005 | F_REQ-2 Status updates across three states, logged with time and acting user, live refresh | `tests/status.test.ts`, `tests/components/status-control.test.tsx` |
 | TC-006 | F_REQ-3 Reminders at 48 hours and at the deadline, per assignee, in-app only | `tests/reminders.test.ts` |
-| TC-005 / TC-006 (label clash) | F_REQ-5 Committee Member can only update self-assigned tasks; Committee Director has full privileges | `tests/access-control.test.ts` — the RTM lists these as TC-008 / TC-009 |
+| TC-008 | F_REQ-5 Committee Director has full event and task privileges | `tests/access-control.test.ts` |
+| TC-009 | F_REQ-5 Committee Member can only update self-assigned tasks | `tests/access-control.test.ts` |
 | — | F_REQ-8 Invite-only sign-up links | `tests/invites.test.ts` |
 | — | F_REQ-8 Password hashes never reach the browser | `tests/credentials.test.ts` |
 | — (supports TC-016) | NF_REQ-2 Actions run as the signed-in member, production secrets enforced, live version shared through the database | `tests/deployment.test.ts` |
-| TC-010 | F_REQ-7 Budget — expected vs actual, variance calculated automatically, AUD | `tests/budget.test.ts` |
+| TC-010 | F_REQ-6 Budget — expected vs actual, variance calculated automatically, AUD | `tests/budget.test.ts` |
 
 Each suite also includes negative tests confirming that roles without the permission get a "You do not have access" result.
 
@@ -103,7 +105,7 @@ string. Tests sign in by setting the session cookie (`signInAs` in `tests/helper
 |------|----------------|
 | `src/lib/types.ts` | Domain types, input shapes (`EventInput`, `TaskInput`, `BudgetItemInput`), `ActionResult` |
 | `src/lib/validation.ts` | Pure validators shared by the forms (client) and server actions |
-| `src/lib/money.ts` | AUD helpers for F_REQ-7: parse/format amounts, per-item variance, `summariseBudget` totals. Amounts are integer cents |
+| `src/lib/money.ts` | AUD helpers for F_REQ-6: parse/format amounts, per-item variance, `summariseBudget` totals. Amounts are integer cents |
 | `src/lib/data.ts` | All database reads and writes through Prisma, returning the plain types in `types.ts`. `hasPermission` / `canUpdateTask` implement F_REQ-5 |
 | `src/lib/db.ts` | The Prisma client (one per server instance, pooled `pg` connection, `DATABASE_URL`) |
 | `prisma/schema.prisma`, `prisma/migrations/` | Database schema and the SQL migrations applied by `prisma migrate deploy` |
@@ -147,7 +149,7 @@ Log in as the IT Director (`michael@cca.org.au`), open **Members** and choose **
 - Links expire after 7 days and work once. Only a SHA-256 hash of the token is stored, so a lost link can't be shown again; use **New link** under Pending invites (the old link stops working) or **Cancel invite**.
 - The invitee sets their name and a password (at least 10 characters) and is signed straight in with the invited role.
 
-## Event budget (F_REQ-7)
+## Event budget (F_REQ-6)
 
 Open an event (`/events/[id]`) and scroll to **Budget**.
 

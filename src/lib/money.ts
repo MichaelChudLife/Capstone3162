@@ -1,6 +1,6 @@
 import type { BudgetItem } from "./types";
 
-// F_REQ-7: the budget module is AUD only. Amounts are integer cents.
+// F_REQ-6: the budget module is AUD only. Amounts are integer cents.
 export const CURRENCY = "AUD";
 export const MAX_AMOUNT_CENTS = 100_000_000_00; // $100,000,000.00
 
